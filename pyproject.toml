@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "moa"
+version = "0.1.0"
+description = ""
+authors = ["e-mon <emon18@icloud.com>"]
+
+[tool.poetry.dependencies]
+python = ">=3.6"
+tqdm = "*"
+pandas = "*"
+ipython = "*"
+sklearn = "*"
+lightgbm = "*"
+catboost = "*"
+xgboost = "*"
+numpy = "*"
+scipy = "*"
+seaborn = "*"
+
+
+[tool.poetry.dev-dependencies]
+flake8 = "^3.8.4"
+black = {version = "^20.8b1", allow-prereleases = true}
+yapf = "^0.30.0"
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"

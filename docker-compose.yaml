@@ -1,0 +1,21 @@
+version: "3"
+
+services:
+  jupyter:
+    entrypoint: ""
+    command: jupyter notebook --ip=0.0.0.0 --allow-root --no-browser --port 8080 --NotebookApp.token=hogehoge123
+    image: gcr.io/kaggle-gpu-images/python:latest
+    runtime: nvidia
+    environment:
+      LD_LIBRARY_PATH: "/usr/local/cuda/lib64::/opt/conda/lib"
+    user: root
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./notebooks:/notebooks
+      - /data:/input
+      - /usr/local/cuda:/usr/local/cuda
+      - ~/.jupyter:/root/.jupyter
+      - ~/.local/share/jupyter:/root/.local/share/jupyter
+    working_dir: /
+

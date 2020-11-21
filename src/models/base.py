@@ -4,6 +4,7 @@ from typing import NamedTuple, Callable, List, Dict
 import numpy as np
 import pandas as pd
 from logging import getLogger
+from src.experiment.experiment import Experiment
 
 logger = getLogger(__name__)
 
@@ -16,7 +17,7 @@ class ModelResult(NamedTuple):
 
 
 class BaseModel:
-    def __init__(self, ignore_cols: List[str], target_col: str, categorical_cols: List[str], metric: Callable):
+    def __init__(self, ignore_cols: List[str], target_col: str, categorical_cols: List[str], metric: Callable, exp: Experiment):
         self.ignore_cols = ignore_cols
         self.metric = metric
         self.result = None

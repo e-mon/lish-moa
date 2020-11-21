@@ -1,4 +1,4 @@
-# https://github.com/nyanp/nyaggle/blob/master/nyaggle/experiment/run.py
+# https://github.com/nyanp/nyaggle/blob/master/nyaggle/experiment/experiment.py
 
 import json
 import numbers

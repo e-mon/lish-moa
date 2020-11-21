@@ -1,6 +1,7 @@
 import base64
 import gzip
 from pathlib import Path
+import git
 
 template = """
 import gzip
@@ -27,7 +28,9 @@ def run(command):
 
 
 run('python setup.py develop --install-dir /kaggle/working')
-print('')
+
+# output current commit hash
+print('{commit_hash}')
 """
 
 
@@ -36,12 +39,17 @@ def encode_file(path: Path) -> str:
     return base64.b64encode(compressed).decode('utf-8')
 
 
+def get_commit_hash():
+    repo = git.Repo(search_parent_directories=True)
+    return repo.head.object.hexsha
+
+
 def build_script():
     to_encode = list(Path('src').glob('**/*.py'))
     file_data = {str(path): encode_file(path) for path in to_encode}
     output_path = Path('.build/script.py')
     output_path.parent.mkdir(exist_ok=True)
-    output_path.write_text(template.replace('{file_data}', str(file_data)), encoding='utf8')
+    output_path.write_text(template.replace('{file_data}', str(file_data)).replace('{commit_hash}', get_commit_hash()), encoding='utf8')
 
 
 if __name__ == '__main__':

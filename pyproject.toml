@@ -16,6 +16,8 @@ xgboost = "*"
 numpy = "*"
 scipy = "*"
 seaborn = "*"
+gitpython = "^3.1.11"
+hydra = "^2.5"
 
 
 [tool.poetry.dev-dependencies]

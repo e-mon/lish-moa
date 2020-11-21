@@ -14,7 +14,6 @@ from typing import Dict
 # this is base64 encoded source code
 file_data: Dict = {file_data}
 
-
 for path, encoded in file_data.items():
     print(path)
     path = Path(path)
@@ -23,7 +22,7 @@ for path, encoded in file_data.items():
 
 
 def run(command):
-    os.system('echo "from setuptools import setup\n setup( name='src', packages=['src'],)" > setup.py')
+    os.system('echo "from setuptools import setup; setup(name=\\'src\\', packages=[\\'src\\'],)" > setup.py')
     os.system('export PYTHONPATH=${PYTHONPATH}:/kaggle/working && ' + command)
 
 

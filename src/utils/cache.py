@@ -1,4 +1,4 @@
-from typing import Any, Union, Dict, List, Callable, Optional
+from typing import Any, Union, Dict, List, Callable, Optional, ByteString
 import hashlib
 import pickle
 from pandas.util import hash_pandas_object
@@ -15,6 +15,10 @@ import operator
 import functools
 import json
 from json import JSONEncoder
+
+
+def _hash(obj: ByteString):
+    return hashlib.md5(obj).hexdigest()
 
 
 class Cache:
@@ -34,15 +38,16 @@ class Cache:
             unique_id: str = self._get_unique_id(bound_args.arguments)
             path: Path = self.dir_path.joinpath(f'{func_name}_{unique_id}')
 
-            ret = self._read_cache(path)
+            ret = Cache._read_cache(path, rerun=self.rerun)
             if ret is None:
                 ret = func(*args, **kwargs)
-                self._write(path, ret)
+                Cache._write(path, ret)
             return ret
 
         return wrapper
 
-    def _write(self, path, obj: Union[pd.DataFrame, Any]):
+    @staticmethod
+    def _write(path, obj: Union[pd.DataFrame, Any]):
         # TODO: FileProcessor
         if isinstance(obj, pd.DataFrame):
             path = f'{path}.feather'
@@ -52,8 +57,9 @@ class Cache:
             with open(str(path), 'wb') as f:
                 pickle.dump(obj, f, protocol=4)
 
-    def _read_cache(self, path: Path) -> Optional[Any]:
-        if self.rerun:
+    @staticmethod
+    def _read_cache(path: Path, rerun: bool) -> Optional[Any]:
+        if rerun:
             return None
         if Path(f'{path}.pickle').exists():
             return pickle.load(open(f'{path}.pickle', 'rb'))
@@ -61,10 +67,11 @@ class Cache:
             return pd.read_feather(f'{path}.feather')
         return None
 
-    def _get_unique_id(self, params: Dict) -> str:
+    @classmethod
+    def _get_unique_id(cls, params: Dict) -> str:
         if not params:
             return '_with_no_param'
-        dependencies = [f'{key}_{self._get_hash(param)}' for key, param in sorted(params.items(), key=lambda item: str(item[0]))]
+        dependencies = [f'{key}_{cls._get_hash(param)}' for key, param in sorted(params.items(), key=lambda item: str(item[0]))]
         return hashlib.md5(str(dependencies).encode()).hexdigest()
 
     @classmethod
@@ -78,26 +85,26 @@ class Cache:
         elif isinstance(obj, (list, dict, tuple)):
             return cls._mutables(obj)
         else:
-            return hash(pickle.dumps(obj))
+            return _hash(pickle.dumps(obj))
 
         return -1
 
     @staticmethod
     def _data_frame(obj: pd.DataFrame):
-        return hash_pandas_object(obj)
+        return hash_pandas_object(obj).sum()
 
     @staticmethod
     def _ndarray(obj: np.ndarray):
         # not implemented
-        return hash(bytes(obj))
+        return _hash(bytes(obj))
 
     @staticmethod
     def _mutables(obj: List[Any]):
-        return hash(json.dumps(obj, cls=_DictParamEncoder))
+        return _hash(json.dumps(obj, cls=_DictParamEncoder).encode())
 
     @staticmethod
     def _literals(obj: Union[int, str, float]):
-        return id(obj)
+        return _hash(str(obj).encode())
 
 
 # from https://github.com/spotify/luigi/blob/master/luigi/parameter.py#L940

@@ -6,7 +6,7 @@ import numpy as np
 from src.utils.cache import Cache
 from src.utils.misc import LoggerFactory
 
-logger = LoggerFactory().getLogger(__file__)
+logger = LoggerFactory().getLogger(__name__)
 
 
 def get_cp_time_feature(s):

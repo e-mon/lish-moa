@@ -5,7 +5,7 @@ from sklearn.metrics import log_loss
 
 from utils.misc import LoggerFactory
 
-logger = LoggerFactory().getLogger(__file__)
+logger = LoggerFactory().getLogger(__name__)
 
 
 def calc_competition_metric_torch(train_features_df, target_cols, oof_arr, train_idx):

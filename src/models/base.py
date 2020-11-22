@@ -78,7 +78,7 @@ class MoaBase:
 
         models = dict()
         scores = dict()
-        oof_preds = np.zeros_like(y_train)
+        oof_preds = np.zeros_like(y_train).astype(float)
         self.predictors = [col for col in X_train.columns.tolist() if col not in self.ignore_cols]
 
         logger.info(f'{self.__class__.__name__} train start')
@@ -87,7 +87,8 @@ class MoaBase:
             logger.info(f'fold {fold}: #row of train: {len(train_idx)}, #row of valid: {len(valid_idx)}')
             for i in range(self.num_seed_blends):
                 valid_preds, model = self._train(X=X_train, y=y_train, predictors=self.predictors, train_idx=train_idx, valid_idx=valid_idx, seed=i)
-                oof_preds[valid_idx] = valid_preds / self.num_seed_blends
+
+                oof_preds[valid_idx, :] = valid_preds / self.num_seed_blends
                 models[f'fold_{fold}_{i}'] = model
 
             score = self.metric(y_train.iloc[valid_idx].values, valid_preds)

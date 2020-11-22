@@ -188,6 +188,7 @@ class NNTrainer(MoaBase):
             net.eval()
 
             preds_valid = []
+            _valid_loss = []
             best_preds = None
 
             with torch.no_grad():
@@ -197,20 +198,20 @@ class NNTrainer(MoaBase):
                     out = net(x)
                     loss = valid_criterion(out, y)
                     preds_valid.append(out.sigmoid().detach().cpu().numpy())
-                    valid_loss.append(loss.item())
+                    _valid_loss.append(loss.item())
 
                 bar.set_postfix(
                     running_loss=f"{np.mean(running_loss):.5f}",
-                    valid_loss=f"{np.mean(valid_loss):.5f}",
+                    valid_loss=f"{np.mean(_valid_loss):.5f}",
                     best_loss=f"{best_loss:.5f}",
                     best_loss_epoch=f"{best_loss_epoch}",
                 )
 
             train_loss.append(np.mean(running_loss))
-            valid_loss.append(np.mean(valid_loss))
+            valid_loss.append(np.mean(_valid_loss))
 
-            if best_loss > np.mean(valid_loss):
-                best_loss = np.mean(valid_loss)
+            if best_loss > np.mean(_valid_loss):
+                best_loss = np.mean(_valid_loss)
                 best_loss_epoch = epoch + 1
                 best_preds = np.concatenate(preds_valid)
                 best_state = copy.deepcopy(net.state_dict())

@@ -19,7 +19,7 @@ class SVMTrainer(MoaBase):
         y_train, y_valid = y.iloc[train_idx], y.iloc[valid_idx]
         target_cols = y_valid.columns.tolist()
 
-        pred_valid = np.zeros_like(y_valid)
+        pred_valid = np.zeros_like(y_valid).astype(float)
 
         # multilabel分回す
         models = dict()

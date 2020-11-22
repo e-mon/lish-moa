@@ -34,6 +34,6 @@ def logloss_for_multilabel(actual, preds):
 
     results = []
     for i in range(actual.shape[1]):
-        results.append(log_loss(actual[:, i], preds[:, k])
-    
+        results.append(log_loss(actual[:, i], preds[:, k]))
+
     return np.mean(results)

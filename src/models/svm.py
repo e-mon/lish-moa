@@ -29,7 +29,7 @@ class SVMTrainer(MoaBase):
                 logger.info(f'{target_col} is all zeros')
                 clf = AllZerosClassifier()
             else:
-                clf = SVC(cache_size=6000, probability=True)
+                clf = SVC(cache_size=2000, probability=True)
                 clf.fit(X_train[predictors].values, y_train[target_col].values.astype(int), convert_dtype=False)
             pred_valid[:, idx] = clf.predict_proba(X_valid[predictors].values)[:, 1]
 

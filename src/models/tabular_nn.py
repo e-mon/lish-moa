@@ -166,6 +166,7 @@ class NNTrainer(MoaBase):
         valid_loss = []
 
         best_loss = np.inf
+        best_preds = None
         best_loss_epoch = 1
 
         for epoch in bar:
@@ -189,7 +190,6 @@ class NNTrainer(MoaBase):
 
             preds_valid = []
             _valid_loss = []
-            best_preds = None
 
             with torch.no_grad():
                 for x, y in valid_dataloader:

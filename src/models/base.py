@@ -85,7 +85,7 @@ class MoaBase:
         oof_preds = np.zeros_like(y_train)
         self.predictors = [col for col in X_train.columns.tolist() if col not in self.ignore_cols]
 
-        logger.info(f'{__class__.__name__} train start')
+        logger.info(f'{self.__class__.__name__} train start')
         logger.info(f'X shape: {X_train.shape}, y shape: {y_train.shape}')
         for fold, (train_idx, valid_idx) in enumerate(folds):
             logger.info(f'fold {fold}: #row of train: {len(train_idx)}, #row of valid: {len(valid_idx)}')

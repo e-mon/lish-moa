@@ -1,9 +1,9 @@
 from typing import List, Optional
 
 from src.utils.misc import LoggerFactory
-from src.model.loss import SmoothBCEwLogits
+from src.models.loss import SmoothBCEwLogits
 from src.models.base import MoaBase
-from src.utils.environment import get_DEVICE
+from src.utils.environment import get_device
 import copy
 import pandas as pd
 import numpy as np
@@ -15,7 +15,7 @@ from torch.utils.data import Dataset, DataLoader
 from torch.optim.lr_scheduler import MultiStepLR
 from torch import optim
 
-DEVICE = get_DEVICE()
+DEVICE = get_device()
 logger = LoggerFactory().getLogger(__name__)
 
 

@@ -12,7 +12,7 @@ def requires_mlflow():
 
 try:
     import torch
-    _hash_torch = True
+    _has_torch = True
 except ImportError:
     _has_torch = False
 

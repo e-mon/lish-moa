@@ -36,6 +36,21 @@ class TestCache(unittest.TestCase):
 
         self.assertEqual(result, expected)
 
+    def test_with_no_param(self):
+        def read_cache(path, rerun):
+            self.path = path
+            return path
+
+        with patch('src.utils.cache.Cache._read_cache', read_cache):
+
+            @Cache('test')
+            def func():
+                return ''
+
+            expected = 'test/func_with_no_param'
+            _ = func()
+            self.assertEqual(str(self.path), expected)
+
     def test_read_path(self):
         def read_cache(path, rerun):
             self.path = path
@@ -48,8 +63,9 @@ class TestCache(unittest.TestCase):
                 return param
 
             expected = 'test/func_b4216b72b74587638f054cc8e5e9825c'
-            ret = func('abc')
+            ret_1 = func('abc')
             self.assertEqual(str(self.path), expected)
 
-            ret = func('def')
+            ret_2 = func('def')
             self.assertNotEqual(str(self.path), expected)
+            self.assertNotEqual(ret_1, ret_2)

@@ -7,14 +7,18 @@ from pathlib import Path
 from inspect import signature
 import numpy as np
 from collections import OrderedDict
-try:
-    from collections.abc import Mapping
-except ImportError:
-    from collections import Mapping
 import operator
 import functools
 import json
 from json import JSONEncoder
+try:
+    from collections.abc import Mapping
+except ImportError:
+    from collections import Mapping
+
+from src.utils.misc import LoggerFactory
+
+logger = LoggerFactory().getLogger(__name__)
 
 
 def _hash(obj: ByteString):
@@ -38,8 +42,10 @@ class Cache:
             unique_id: str = self._get_unique_id(bound_args.arguments)
             path: Path = self.dir_path.joinpath(f'{func_name}_{unique_id}')
 
+            logger.info(f'{func_name}_{unique_id} has been called')
             ret = Cache._read_cache(path, rerun=self.rerun)
             if ret is None:
+                logger.info(f'{func_name}_{unique_id} cache not found')
                 ret = func(*args, **kwargs)
                 Cache._write(path, ret)
             return ret
@@ -70,7 +76,7 @@ class Cache:
     @classmethod
     def _get_unique_id(cls, params: Dict) -> str:
         if not params:
-            return '_with_no_param'
+            return 'with_no_param'
         dependencies = [f'{key}_{cls._get_hash(param)}' for key, param in sorted(params.items(), key=lambda item: str(item[0]))]
         return hashlib.md5(str(dependencies).encode()).hexdigest()
 

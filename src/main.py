@@ -63,7 +63,8 @@ def tprint(*args, **kwargs):
 config_d = {
     "is_kernel": False,  # kaggle notebookで実行するときにはTrueとする
     "debug": True,  # 各所で処理をバイパスする
-    "phase": "train",  # train/pred
+    # "phase": "train",  # train/pred
+    "phase": "pred",  # train/pred
 }
 
 # モデルやキャッシュ出力用のディレクトリを整備
@@ -177,179 +178,6 @@ def get_score(weights, train_features_df, train_idx, oof_1, oof_2, stage_1_2_tar
     return _calc_competition_metric(train_features_df, stage_1_2_target_cols, blend, train_idx)
 
 
-def run_cuml_svm(clf, train, test, targets, features, n_splits, stage_1_2_target_cols, seed=42):
-    losses = []
-    model_oof_tmp = []
-    model_pred_tmp = []
-    for i in tqdm(range(len(targets))):
-        oof, pred, loss = run_kfold_svm(clf, train, test, targets[i], features, n_splits, stage_1_2_target_cols, seed)
-        model_oof_tmp.append(oof)
-        model_pred_tmp.append(pred)
-        losses.append(loss)
-
-    model_oof = np.stack(model_oof_tmp).T
-    model_pred = np.stack(model_pred_tmp).T
-
-    tprint(f"competition metric : {np.mean(losses):.5f}")
-
-    return model_oof, model_pred
-
-
-def run_kfold_nn_model(train, test, targets, features, n_splits, seed, stage, model_class, config, stage_1_2_target_cols):
-    seed_everything(seed=seed)
-
-    train = train.copy()
-    test = test.copy()
-
-    learning_rate = config["lr"]
-    batch_size = config["batch_size"]
-    epoch = config["epoch"]
-
-    fold = get_fold(train, stage_1_2_target_cols, n_splits=n_splits, seed=seed)
-
-    oof = np.zeros((len(train), len(targets)))
-    pred = np.zeros((len(test), len(targets)))
-
-    print(oof.shape)
-    print(pred.shape)
-
-    for k in range(n_splits):
-        train_index = np.where(fold != k)[0]
-        test_index = np.where(fold == k)[0]
-
-        net = model_class(features, targets).to(device)
-        optimizer = optim.Adam(net.parameters(), lr=learning_rate, weight_decay=1e-6)
-        val_criterion = nn.BCEWithLogitsLoss()
-        criterion = SmoothBCEwLogits(smoothing=0.001)
-
-        scheduler = MultiStepLR(optimizer, milestones=[10, 15], gamma=0.1)
-
-        train_dataset = TabularDataset(train.iloc[train_index], True, targets, features)
-        train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
-
-        validation_dataset = TabularDataset(train.iloc[test_index], True, targets, features)
-        validation_dataloader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False)
-
-        test_dataset = TabularDataset(test, False, targets, features)
-        test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-
-        bar = trange(epoch, desc=f"fold : {k+1} train : {len(train_index)}  test:{len(test_index)}====")
-        train_loss = []
-        val_loss = []
-
-        best_loss = 10000
-        best_loss_epoch = 1
-
-        for e in bar:
-            running_loss = []
-            validation_loss = []
-
-            # train
-            net.train()
-            for x, y in train_dataloader:
-                x = x.to(device)
-                y = y.to(device)
-                optimizer.zero_grad()
-                out = net(x)
-                loss = criterion(out, y)
-                loss.backward()
-                running_loss.append(loss.item())
-                optimizer.step()
-            scheduler.step()
-
-            net.eval()
-
-            tmp_oof = []
-            with torch.no_grad():
-                for x, y in validation_dataloader:
-                    x = x.to(device)
-                    y = y.to(device)
-                    out = net(x)
-                    loss = val_criterion(out, y)
-                    tmp_oof.append(out.sigmoid().detach().cpu().numpy())
-                    validation_loss.append(loss.item())
-
-                bar.set_postfix(
-                    running_loss=f"{np.mean(running_loss):.5f}",
-                    validation_loss=f"{np.mean(validation_loss):.5f}",
-                    best_loss=f"{best_loss:.5f}",
-                    best_loss_epoch=f"{best_loss_epoch}",
-                )
-
-            train_loss.append(np.mean(running_loss))
-            val_loss.append(np.mean(validation_loss))
-
-            if best_loss > np.mean(validation_loss):
-                best_loss = np.mean(validation_loss)
-                best_loss_epoch = e + 1
-                oof[test_index] = np.concatenate(tmp_oof)
-                torch.save(net.state_dict(), f"{MODEL_DIR}/stage{stage}_fold{k+1}_best_model_seed_{seed}.pt")
-
-        # fig, ax = plt.subplots(1, figsize=(8, 6))
-        # ax.plot([x for x in range(epoch)], train_loss, color="red", label="train")
-        # ax.plot([x for x in range(epoch)], val_loss, color="green", label="val")
-        # plt.ylim(0.01, 0.025)
-        # plt.legend(loc="lower right", title="Legend Title", frameon=False)
-        # plt.show()
-
-        tprint(f"best loss : {best_loss}")
-
-        # inference
-        net.load_state_dict(torch.load(f"{MODEL_DIR}/stage{stage}_fold{k+1}_best_model_seed_{seed}.pt"))
-        net.eval()
-
-        tmp_pred = []
-        with torch.no_grad():
-            for x in test_dataloader:
-                x = x.to(device)
-                out = net(x)
-                tmp_pred.append(out.sigmoid().detach().cpu().numpy())
-
-        pred += np.concatenate(tmp_pred) / n_splits
-    return oof, pred
-
-
-def run_kfold_svm(clf, train, test, targets, features, n_splits, stage_1_2_target_cols, seed=42):
-    seed_everything(seed=seed)
-    fold = get_fold(train, stage_1_2_target_cols, n_splits=n_splits, seed=seed)
-    oof = np.zeros(len(train))
-    predictions = np.zeros(len(test))
-    for k in range(n_splits):
-        train_index = np.where(fold != k)[0]
-        val_index = np.where(fold == k)[0]
-
-        train_X = train.iloc[train_index][features].values
-        train_y = train.iloc[train_index][targets].values
-
-        val_X = train.iloc[val_index][features].values
-        val_y = train.iloc[val_index][targets].values
-
-        print(train_X.dtype, train_y.dtype, np.unique(train_y, return_counts=True))
-
-        # BUG: 以下が起動ごとに全errorしたりしなかったり確率的にコケる (以下参照)
-        # なかなか解決しないので、何回か回してコケなかったら通すようにする
-        # https://kaggler-ja.slack.com/archives/G01F5QWJ5SM/p1605936016147700
-        try:
-            clf.fit(train_X, train_y, convert_dtype=False)
-            oof[val_index] = clf.predict_proba(val_X)[:, 1]
-            predictions += clf.predict_proba(test[features])[:, 1] / n_splits
-            # save
-            # dump( trained_RF, 'RF.model')
-            # to reload the model uncomment the line below
-            # loaded_model = load('RF.model')
-        #             dump(clf, f'stage2_svm_{targets}_fold{k+1}_model_seed_{seed}.model')
-
-        except:
-            oof[val_index] = 0
-            predictions += np.zeros(len(test)) / n_splits
-            tprint("error")
-            # print(f'error fold {k+1} : logloss : {log_loss(val_y, oof[val_index]):.6f}')
-
-    loss = log_loss(train[targets], oof)
-    tprint(f"{targets} oof logloss : {loss:.5f}")
-    return oof, predictions, loss
-
-
 def torch_clear():
     cuda.select_device(0)
     cuda.close()
@@ -377,18 +205,13 @@ class SVMTrainer(object):
             clf = SVC(cache_size=6000, probability=True)
             clf.fit(X_train[self.predictors].values, y_train.values, convert_dtype=False)
             pred_valid = clf.predict_proba(X_valid[self.predictors].values)[:, 1]
-            # predictions += clf.predict_proba(test[features])[:, 1] / n_splits
-            # save
-            # dump( trained_RF, 'RF.model')
-            # to reload the model uncomment the line below
-            # loaded_model = load('RF.model')
-        #             dump(clf, f'stage2_svm_{targets}_fold{k+1}_model_seed_{seed}.model')
+            model_path = f"{MODEL_DIR}/stage2_svm_{target}_fold{fold+1}_model_seed_{seed}.model.joblib"
+            tprint(f"output model -> {model_path}")
+            dump(clf, model_path)
 
         except:
             pred_valid = np.zeros(X_valid.shape[0])
-            # predictions += np.zeros(len(test)) / n_splits
             tprint("error")
-            # print(f'error fold {k+1} : logloss : {log_loss(val_y, oof[val_index]):.6f}')
 
         return pred_valid
 
@@ -424,6 +247,26 @@ class SVMTrainer(object):
             self.oof.append(target_oof / self.n_rsb)
 
         self.oof = np.stack(self.oof).T
+
+    def predict(self, X_test):
+        pred = []
+        for i in tqdm(range(len(self.targets))):
+            target = self.targets[i]
+            target_pred = np.zeros(len(X_test))
+            for k in range(self.n_splits):
+                for rsb_idx in range(self.n_rsb):
+                    try:
+                        model_path = f"{MODEL_DIR}/stage2_svm_{target}_fold{k+1}_model_seed_{rsb_idx}.model.joblib"
+                        clf = load(model_path)
+                        tprint(f"loaded: {model_path}")
+
+                        target_pred += clf.predict_proba(X_test[self.predictors])[:, 1] / (self.n_splits * self.n_rsb)
+                    except:
+                        target_pred += np.zeros(len(X_test))
+            pred.append(target_pred)
+        pred = np.stack(pred).T
+        return pred
+
 
 class NNTrainer(object):
     def __init__(self, predictors, targets, X, n_splits, n_rsb, config_d, stage, model_class):
@@ -526,14 +369,31 @@ class NNTrainer(object):
             y_train, y_valid = self.X.loc[train_idx, self.targets], self.X.loc[valid_idx, self.targets]
 
             for rsb_idx in range(self.n_rsb):
-                self._fit(
-                    X_train=X_train,
-                    y_train=y_train,
-                    X_valid=X_valid,
-                    y_valid=y_valid,
-                    fold=k,
-                    seed=rsb_idx
-                )
+                self._fit(X_train=X_train, y_train=y_train, X_valid=X_valid, y_valid=y_valid, fold=k, seed=rsb_idx)
+
+    def predict(self, X_test):
+        pred = np.zeros((len(X_test), len(self.targets)))
+        for k in range(self.n_splits):
+            for rsb_idx in range(self.n_rsb):
+                model_path = f"{MODEL_DIR}/stage{self.stage}_fold{k+1}_best_model_seed_{rsb_idx}.pt"
+
+                net = self.model_class(self.predictors, self.targets).to(device)
+                net.load_state_dict(torch.load(model_path))
+                net.eval()
+                tprint(f"loaded: {model_path}")
+
+                test_dataset = TabularDataset(X_test, False, self.targets, self.predictors)
+                test_dataloader = DataLoader(test_dataset, batch_size=self.config_d["batch_size"], shuffle=False)
+
+                tmp_pred = []
+                with torch.no_grad():
+                    for x in test_dataloader:
+                        x = x.to(device)
+                        out = net(x)
+                        tmp_pred.append(out.sigmoid().detach().cpu().numpy())
+
+                pred += np.concatenate(tmp_pred) / (self.n_splits * self.n_rsb)
+        return pred
 
 
 class SmoothBCEwLogits(_WeightedLoss):
@@ -764,9 +624,8 @@ def common_preprocess():
 
     return (
         train_features_df,
-        # test_features_df if config_d["phase"] == "pred" else None,
-        test_features_df,  # 開発中はtrainであったとしてもtestを常に渡すようにする (debugと併用)
-        sample_submission_df,  # 開発中はtrainであったとしてもsubを常に渡すようにする (debugと併用)
+        test_features_df if config_d["phase"] == "pred" else None,
+        sample_submission_df if config_d["phase"] == "pred" else None,
         stage_1_1_target_cols,
         stage_1_2_target_cols,
         stage_1_train_features,
@@ -776,8 +635,8 @@ def common_preprocess():
 def exec_train():
     (
         train_features_df,
-        test_features_df,
-        sample_submission_df,
+        _,
+        _,
         stage_1_1_target_cols,
         stage_1_2_target_cols,
         stage_1_train_features,
@@ -792,10 +651,8 @@ def exec_train():
 
     # transforming
     train_features_df[stage_1_train_features] = transformer.transform(train_features_df.loc[:, stage_1_train_features])
-    test_features_df[stage_1_train_features] = transformer.transform(test_features_df.loc[:, stage_1_train_features])
 
     tprint("--- stage 1-1: predict scored + nonscored target ---")
-    stage1_1_rsb_nn_pred = np.zeros((len(test_features_df), len(stage_1_1_target_cols)))
     stage1_1_nn_trainer = NNTrainer(
         predictors=stage_1_train_features,
         targets=stage_1_1_target_cols,
@@ -818,13 +675,10 @@ def exec_train():
     tprint(
         f"""
     stage1_1_rsb_nn_oof: {stage1_1_nn_trainer.oof.shape}
-    stage1_1_rsb_nn_pred: {stage1_1_rsb_nn_pred.shape}
     """
     )
 
     tprint("--- stage 1-2: predict scored target ---")
-    # stage1_2_rsb_svm_oof = np.zeros((len(train_features_df), len(stage_1_2_target_cols)))
-    stage1_2_rsb_svm_pred = np.zeros((len(test_features_df), len(stage_1_2_target_cols)))
     stage1_2_svm_trainer = SVMTrainer(
         predictors=stage_1_train_features,
         targets=stage_1_2_target_cols,
@@ -834,33 +688,10 @@ def exec_train():
     )
     stage1_2_svm_trainer.fit()
 
-    # random_seeds = [42]  # , 123, 289, 999, 7777]
-    # if config_d["debug"]:
-    #     # ここは重いので、デバッグ時はスキップしてしまう
-    #     random_seeds = []
-
-    # for s in random_seeds:
-    #     tprint(f"seed={s}")
-    #     clf = SVC(cache_size=6000, probability=True)
-    #     stage1_2_svm_oof, stage1_2_svm_pred = run_cuml_svm(
-    #         clf=clf,
-    #         train=train_features_df,
-    #         test=test_features_df,
-    #         targets=stage_1_2_target_cols,
-    #         features=stage_1_train_features,
-    #         # K=4 if not config_d["debug"] else 2,
-    #         n_splits=4,
-    #         stage_1_2_target_cols=stage_1_2_target_cols,
-    #         seed=s,
-    #     )
-    #     stage1_2_rsb_svm_oof += stage1_2_svm_oof / len(random_seeds)
-    #     stage1_2_rsb_svm_pred += stage1_2_svm_pred / len(random_seeds)
-
     competition_metric = []
     for i in range(len(stage_1_2_target_cols)):
         competition_metric.append(log_loss(train_features_df[stage_1_2_target_cols[i]], stage1_2_svm_trainer.oof[:, i]))
     tprint(f"competition_metric: {np.mean(competition_metric)}")
-    stage1_2_rsb_nn_pred = np.zeros((len(test_features_df), len(stage_1_2_target_cols)))
     stage1_2_nn_trainer = NNTrainer(
         predictors=stage_1_train_features,
         targets=stage_1_2_target_cols,
@@ -891,11 +722,9 @@ def exec_train():
         f"""
     [stage1-1]
     stage1_1_rsb_nn_oof: {stage1_1_nn_trainer.oof.shape}
-    stage1_1_rsb_nn_pred: {stage1_1_rsb_nn_pred.shape}
 
     [stage1-2]
     stage1_2_rsb_nn_oof: {stage1_2_nn_trainer.oof.shape}
-    stage1_2_rsb_nn_pred: {stage1_2_rsb_nn_pred.shape}
     """
     )
 
@@ -908,25 +737,15 @@ def exec_train():
         ],
         axis=1,
     )
+    stack_train_df.to_pickle(f"{CACHE_DIR}/stack_train_df.pickle")
 
-    stack_test_df = pd.concat(
-        [
-            pd.DataFrame(stage1_1_rsb_nn_pred).add_prefix("stage1_1_nn_"),
-            #     pd.DataFrame(stage1_2_rsb_svm_pred).add_prefix('stage1_2_svm_'),
-            pd.DataFrame(stage1_2_rsb_nn_pred).add_prefix("stage1_2_nn_"),
-        ],
-        axis=1,
-    )
     tprint(
         f"""
     stack_train_df: {stack_train_df.shape}
-    stack_test_df: {stack_test_df.shape}
     """
     )
 
     stack_train_features = [x for x in stack_train_df.columns if x not in stage_1_2_target_cols + ["drug_id", "sig_id"]]
-
-    rsb_stack_pred = np.zeros((len(stack_test_df), len(stage_1_2_target_cols)))
     stack_trainer = NNTrainer(
         predictors=stack_train_features,
         targets=stage_1_2_target_cols,
@@ -950,32 +769,20 @@ def exec_train():
     tprint(
         f"""
     rsb_stack_oof: {stack_trainer.oof.shape}
-    rsb_stack_pred: {rsb_stack_pred.shape}
     stage1_2_rsb_svm_oof: {stage1_2_svm_trainer.oof.shape}
-    stage1_2_rsb_svm_pred: {stage1_2_rsb_svm_pred.shape}
     """
     )
 
-    best_weight = get_best_weights(stack_trainer.oof, stage1_2_svm_trainer.oof, train_features_df, stage_1_2_target_cols)
+    best_weight = get_best_weights(
+        stack_trainer.oof, stage1_2_svm_trainer.oof, train_features_df, stage_1_2_target_cols
+    )
+    dump(best_weight, f"{MODEL_DIR}/best_weight.joblib")
     tprint(f"best_weight: {best_weight}")
 
     blend_oof = stack_trainer.oof * best_weight + stage1_2_svm_trainer.oof * (1 - best_weight)
-    blend_pred = rsb_stack_pred * best_weight + stage1_2_rsb_svm_pred * (1 - best_weight)
 
     tprint("[metric: blend_oof]")
     calc_competition_metric(train_features_df, stage_1_2_target_cols, blend_oof)
-
-    test_features_df[stage_1_2_target_cols] = blend_pred
-
-    # post process
-    test_features_df.loc[test_features_df["cp_type"] != "trt_cp", stage_1_2_target_cols] = 0
-
-    sub = (
-        sample_submission_df.drop(columns=stage_1_2_target_cols)
-        .merge(test_features_df[["sig_id"] + stage_1_2_target_cols], on="sig_id", how="left")
-        .fillna(0)
-    )
-    sub.to_csv(f"{RESULT_DIR}/submission.csv", index=False)
 
 
 def exec_pred():
@@ -987,6 +794,109 @@ def exec_pred():
         stage_1_2_target_cols,
         stage_1_train_features,
     ) = common_preprocess()
+
+    # transformer読み込み、実行
+    # TODO: trainについても再実行する必要はあるか？
+    transformer = load(f"{MODEL_DIR}/transformer.joblib")
+    train_features_df[stage_1_train_features] = transformer.transform(train_features_df.loc[:, stage_1_train_features])
+    test_features_df[stage_1_train_features] = transformer.transform(test_features_df.loc[:, stage_1_train_features])
+
+    tprint("--- stage 1-1: predict scored + nonscored target ---")
+    stage1_1_nn_trainer = NNTrainer(
+        predictors=stage_1_train_features,
+        targets=stage_1_1_target_cols,
+        X=train_features_df,
+        n_splits=7 if not config_d["debug"] else 2,
+        n_rsb=5 if not config_d["debug"] else 1,
+        config_d={
+            "epoch": 20 if not config_d["debug"] else 1,
+            "lr": 0.01,
+            "batch_size": 128,
+        },
+        stage=1,
+        model_class=TabularMLP_1_1,
+    )
+    stage1_1_rsb_nn_pred = stage1_1_nn_trainer.predict(test_features_df)
+
+    tprint("--- stage 1-2: predict scored target ---")
+    stage1_2_svm_trainer = SVMTrainer(
+        predictors=stage_1_train_features,
+        targets=stage_1_2_target_cols,
+        X=train_features_df,
+        n_splits=4 if not config_d["debug"] else 2,
+        n_rsb=1,
+    )
+    stage1_2_rsb_svm_pred = stage1_2_svm_trainer.predict(test_features_df)
+
+    stage1_2_nn_trainer = NNTrainer(
+        predictors=stage_1_train_features,
+        targets=stage_1_2_target_cols,
+        X=train_features_df,
+        n_splits=7 if not config_d["debug"] else 2,
+        n_rsb=5 if not config_d["debug"] else 1,
+        config_d={
+            "epoch": 20 if not config_d["debug"] else 1,
+            "lr": 0.01,
+            "batch_size": 128,
+        },
+        stage=2,
+        model_class=TabularMLP_1_2,
+    )
+    stage1_2_rsb_nn_pred = stage1_2_nn_trainer.predict(test_features_df)
+
+    tprint("--- stage 2 ---")
+    tprint(
+        f"""
+    [stage1-1]
+    stage1_1_rsb_nn_pred: {stage1_1_rsb_nn_pred.shape}
+
+    [stage1-2]
+    stage1_2_rsb_nn_pred: {stage1_2_rsb_nn_pred.shape}
+    """
+    )
+
+    stack_train_df = pd.read_pickle(f"{CACHE_DIR}/stack_train_df.pickle")
+    stack_test_df = pd.concat(
+        [
+            pd.DataFrame(stage1_1_rsb_nn_pred).add_prefix("stage1_1_nn_"),
+            #     pd.DataFrame(stage1_2_rsb_svm_pred).add_prefix('stage1_2_svm_'),
+            pd.DataFrame(stage1_2_rsb_nn_pred).add_prefix("stage1_2_nn_"),
+        ],
+        axis=1,
+    )
+
+    stack_train_features = [x for x in stack_train_df.columns if x not in stage_1_2_target_cols + ["drug_id", "sig_id"]]
+
+    stack_trainer = NNTrainer(
+        predictors=stack_train_features,
+        targets=stage_1_2_target_cols,
+        X=stack_train_df,
+        n_splits=7 if not config_d["debug"] else 2,
+        n_rsb=5 if not config_d["debug"] else 1,
+        config_d={
+            "epoch": 20 if not config_d["debug"] else 1,
+            "lr": 0.01,
+            "batch_size": 128,
+        },
+        stage=3,
+        model_class=TabularMLP_2,
+    )
+    rsb_stack_pred = stack_trainer.predict(stack_test_df)
+    print(rsb_stack_pred.shape)
+
+    best_weight = load(f"{MODEL_DIR}/best_weight.joblib")
+    blend_pred = rsb_stack_pred * best_weight + stage1_2_rsb_svm_pred * (1 - best_weight)
+    test_features_df[stage_1_2_target_cols] = blend_pred
+
+    # post process
+    test_features_df.loc[test_features_df["cp_type"] != "trt_cp", stage_1_2_target_cols] = 0
+
+    sub = (
+        sample_submission_df.drop(columns=stage_1_2_target_cols)
+        .merge(test_features_df[["sig_id"] + stage_1_2_target_cols], on="sig_id", how="left")
+        .fillna(0)
+    )
+    sub.to_csv(f"{RESULT_DIR}/submission.csv", index=False)
 
 
 if __name__ == "__main__":

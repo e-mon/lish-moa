@@ -13,6 +13,46 @@ from sklearn.model_selection._split import (
 )
 
 
+def splitter_for_moa(X, target_cols, n_splits=5, seed=42):
+    folds = []
+    X = X.copy()
+    # LOCATE DRUGS
+    vc = X.drug_id.value_counts()
+
+    vc1 = vc.loc[(vc == 6) | (vc == 12) | (vc == 18)].index.sort_values()
+    vc2 = vc.loc[(vc != 6) & (vc != 12) & (vc != 18)].index.sort_values()
+
+    # STRATIFY DRUGS 18X OR LESS
+    dct1 = {}
+    dct2 = {}
+    skf = MultilabelStratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+    tmp = X.groupby("drug_id")[target_cols].mean().loc[vc1]
+    for fold, (idxT, idxV) in enumerate(skf.split(tmp, tmp[target_cols])):
+        dd = {k: fold for k in tmp.index[idxV].values}
+        dct1.update(dd)
+
+    # STRATIFY DRUGS MORE THAN 18X
+    skf = MultilabelStratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+    tmp = X.loc[X.drug_id.isin(vc2)].reset_index(drop=True)
+    for fold, (idxT, idxV) in enumerate(skf.split(tmp, tmp[target_cols])):
+        dd = {k: fold for k in tmp.sig_id[idxV].values}
+        dct2.update(dd)
+
+    # ASSIGN FOLDS
+    X["fold"] = X.drug_id.map(dct1)
+    X.loc[X.fold.isna(), "fold"] = X.loc[X.fold.isna(), "sig_id"].map(dct2)
+    X.fold = X.fold.astype("int8")
+    folds.append(X.fold.values)
+
+    _folds = np.stack(folds).flatten()
+    folds = []
+    for idx in range(n_splits):
+        train_idx = np.where(_folds != idx)[0]
+        valid_idx = np.where(_folds == idx)[0]
+        folds.append((train_idx, valid_idx))
+    return folds
+
+
 class SplitFactory:
     # split_type: necessary params
     split_pattern = {

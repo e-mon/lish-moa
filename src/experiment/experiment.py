@@ -12,7 +12,7 @@ from typing import Dict, Optional
 import numpy as np
 import pandas as pd
 
-from nyaggle.environment import requires_mlflow
+from src.utils.environment import requires_mlflow
 
 MLFLOW_KEY_LENGTH_LIMIT = 250
 MLFLOW_VALUE_LENGTH_LIMIT = 250

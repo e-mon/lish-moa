@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 from sklearn.metrics import log_loss
 
-from utils.misc import LoggerFactory
+from src.utils.misc import LoggerFactory
 
 logger = LoggerFactory().getLogger(__name__)
 
@@ -20,5 +20,20 @@ def calc_competition_metric_torch(train_features_df, target_cols, oof_arr, train
 def calc_competition_metric_np(train_features_df, target_cols, oof_arr):
     competition_metric = []
     for i in range(len(target_cols)):
-        competition_metric.append(log_loss(train_features_df[target_cols[i]], oof_arr[:, i]))
+        competition_metric.append(log_loss(train_features_df[:, target_cols[i]], oof_arr[:, i]))
     logger.info(f"competition metric: {np.mean(competition_metric)}")
+
+    return np.mean(competition_metric)
+
+
+def logloss_for_multilabel(actual, preds):
+    """
+    actual, preds: [n_samples, n_classes]
+    log_loss(actual[:, c], preds[:, c])
+    """
+
+    results = []
+    for i in range(actual.shape[1]):
+        results.append(log_loss(actual[:, i], preds[:, k])
+    
+    return np.mean(results)

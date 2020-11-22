@@ -62,9 +62,9 @@ def tprint(*args, **kwargs):
 
 config_d = {
     "is_kernel": False,  # kaggle notebookで実行するときにはTrueとする
-    "debug": True,  # 各所で処理をバイパスする
-    # "phase": "train",  # train/pred
-    "phase": "pred",  # train/pred
+    "debug": False,  # 各所で処理をバイパスする
+    "phase": "train",  # train/pred
+    # "phase": "pred",  # train/pred
 }
 
 # モデルやキャッシュ出力用のディレクトリを整備
@@ -296,13 +296,14 @@ class NNTrainer(object):
 
         scheduler = MultiStepLR(optimizer, milestones=[10, 15], gamma=0.1)
 
+        # 学習時はlength=1の破片などを回避するためdrop_last=1とする
         train_dataset = TabularDataset(X_train, True, self.targets, self.predictors)
-        train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
+        train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
 
         valid_dataset = TabularDataset(X_valid, True, self.targets, self.predictors)
         valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
 
-        bar = trange(epoch, desc=f"fold : {fold+1} train : {X_train.shape[0]}  valid:{X_valid.shape[0]}====")
+        bar = trange(epoch, desc=f"seed: {seed} fold : {fold+1} train : {X_train.shape[0]}  valid:{X_valid.shape[0]}====")
         train_loss = []
         valid_loss = []
 
@@ -354,7 +355,7 @@ class NNTrainer(object):
                 self.oof[X_valid.index] = np.concatenate(tmp_oof) / self.n_rsb
 
                 model_path = f"{MODEL_DIR}/stage{self.stage}_fold{fold+1}_best_model_seed_{seed}.pt"
-                tprint(f"output model -> {model_path}")
+                # tprint(f"output model -> {model_path}")
                 torch.save(net.state_dict(), model_path)
 
         tprint(f"best loss : {best_loss}")
@@ -604,14 +605,7 @@ def common_preprocess():
             if diff_val > 15:
                 train_features_df[col_name] = d
                 var_list.append(diff_val)
-
-        # FIXME: 開発中のため、testについて学習時も対応
-        for c in tqdm(list(itertools.combinations(features_g + features_c, 2))):
-            col_name = f"{c[0]}_{c[1]}_diff"
-            if col_name in train_features_df.columns:
-                test_features_df[col_name] = test_features_df[c[0]] - test_features_df[c[1]]
         train_features_df.to_pickle(f"{CACHE_DIR}/train_features_df.pickle")
-        test_features_df.to_pickle(f"{CACHE_DIR}/test_features_df.pickle")
 
     stage_1_2_target_cols = [x for x in train_targets_scored_df.columns if x not in ["sig_id", "drug_id"]]
     stage_1_1_target_cols = [

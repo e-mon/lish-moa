@@ -355,6 +355,76 @@ def torch_clear():
     cuda.close()
 
 
+class SVMTrainer(object):
+    def __init__(self, predictors, targets, X, n_splits, n_rsb):
+        self.predictors = predictors
+        self.targets = targets
+        self.X = X
+        self.n_splits = n_splits
+        self.n_rsb = n_rsb
+        self.validation_score = []
+        self.folds = []
+        self.oof = []
+
+    def _fit(self, X_train, y_train, X_valid, y_valid, target, fold, seed):
+        seed_everything(seed=seed)
+        target_oof = np.zeros(len(self.X))
+
+        # BUG: 以下が起動ごとに全errorしたりしなかったり確率的にコケる (以下参照)
+        # なかなか解決しないので、何回か回してコケなかったら通すようにする
+        # https://kaggler-ja.slack.com/archives/G01F5QWJ5SM/p1605936016147700
+        try:
+            clf = SVC(cache_size=6000, probability=True)
+            clf.fit(X_train[self.predictors].values, y_train.values, convert_dtype=False)
+            pred_valid = clf.predict_proba(X_valid[self.predictors].values)[:, 1]
+            # predictions += clf.predict_proba(test[features])[:, 1] / n_splits
+            # save
+            # dump( trained_RF, 'RF.model')
+            # to reload the model uncomment the line below
+            # loaded_model = load('RF.model')
+        #             dump(clf, f'stage2_svm_{targets}_fold{k+1}_model_seed_{seed}.model')
+
+        except:
+            pred_valid = np.zeros(X_valid.shape[0])
+            # predictions += np.zeros(len(test)) / n_splits
+            tprint("error")
+            # print(f'error fold {k+1} : logloss : {log_loss(val_y, oof[val_index]):.6f}')
+
+        return pred_valid
+
+    def fit(self):
+        for i in tqdm(range(len(self.targets))):
+            target = self.targets[i]
+            target_oof = np.zeros(len(self.X))
+
+            # DEBUGでは一部のtargetのみを学習
+            if config_d["debug"] and i >= 3:
+                self.oof.append(target_oof / self.n_rsb)
+                continue
+
+            fold = get_fold(self.X, self.targets, n_splits=self.n_splits, seed=MYSEED)
+            for k in range(self.n_splits):
+                train_idx = np.where(fold != k)[0]
+                valid_idx = np.where(fold == k)[0]
+                X_train, X_valid = self.X.loc[train_idx], self.X.loc[valid_idx]
+                y_train, y_valid = self.X.loc[train_idx, target], self.X.loc[valid_idx, target]
+                for rsb_idx in range(self.n_rsb):
+                    pred_valid = self._fit(
+                        X_train=X_train,
+                        y_train=y_train,
+                        X_valid=X_valid,
+                        y_valid=y_valid,
+                        target=target,
+                        fold=k,
+                        seed=rsb_idx,
+                    )
+                    target_oof[X_valid.index] = pred_valid / self.n_rsb
+            loss = log_loss(self.X[target], target_oof)
+            tprint(f"{target} oof logloss : {loss:.5f}")
+            self.oof.append(target_oof / self.n_rsb)
+
+        self.oof = np.stack(self.oof).T
+
 class NNTrainer(object):
     def __init__(self, predictors, targets, X, n_splits, n_rsb, config_d, stage, model_class):
         self.predictors = predictors
@@ -718,6 +788,7 @@ def exec_train():
 
     # fitting
     transformer.fit(train_features_df.loc[:, stage_1_train_features])
+    dump(transformer, f"{MODEL_DIR}/transformer.joblib")
 
     # transforming
     train_features_df[stage_1_train_features] = transformer.transform(train_features_df.loc[:, stage_1_train_features])
@@ -730,7 +801,7 @@ def exec_train():
         targets=stage_1_1_target_cols,
         X=train_features_df,
         n_splits=7 if not config_d["debug"] else 2,
-        n_rsb=1,
+        n_rsb=5 if not config_d["debug"] else 1,
         config_d={
             "epoch": 20 if not config_d["debug"] else 1,
             "lr": 0.01,
@@ -750,37 +821,44 @@ def exec_train():
     stage1_1_rsb_nn_pred: {stage1_1_rsb_nn_pred.shape}
     """
     )
-    print(stage1_1_nn_trainer.oof[:10])
 
     tprint("--- stage 1-2: predict scored target ---")
-    stage1_2_rsb_svm_oof = np.zeros((len(train_features_df), len(stage_1_2_target_cols)))
+    # stage1_2_rsb_svm_oof = np.zeros((len(train_features_df), len(stage_1_2_target_cols)))
     stage1_2_rsb_svm_pred = np.zeros((len(test_features_df), len(stage_1_2_target_cols)))
+    stage1_2_svm_trainer = SVMTrainer(
+        predictors=stage_1_train_features,
+        targets=stage_1_2_target_cols,
+        X=train_features_df,
+        n_splits=4 if not config_d["debug"] else 2,
+        n_rsb=1,
+    )
+    stage1_2_svm_trainer.fit()
 
-    random_seeds = [42]  # , 123, 289, 999, 7777]
-    if config_d["debug"]:
-        # ここは重いので、デバッグ時はスキップしてしまう
-        random_seeds = []
+    # random_seeds = [42]  # , 123, 289, 999, 7777]
+    # if config_d["debug"]:
+    #     # ここは重いので、デバッグ時はスキップしてしまう
+    #     random_seeds = []
 
-    for s in random_seeds:
-        tprint(f"seed={s}")
-        clf = SVC(cache_size=6000, probability=True)
-        stage1_2_svm_oof, stage1_2_svm_pred = run_cuml_svm(
-            clf=clf,
-            train=train_features_df,
-            test=test_features_df,
-            targets=stage_1_2_target_cols,
-            features=stage_1_train_features,
-            # K=4 if not config_d["debug"] else 2,
-            n_splits=4,
-            stage_1_2_target_cols=stage_1_2_target_cols,
-            seed=s,
-        )
-        stage1_2_rsb_svm_oof += stage1_2_svm_oof / len(random_seeds)
-        stage1_2_rsb_svm_pred += stage1_2_svm_pred / len(random_seeds)
+    # for s in random_seeds:
+    #     tprint(f"seed={s}")
+    #     clf = SVC(cache_size=6000, probability=True)
+    #     stage1_2_svm_oof, stage1_2_svm_pred = run_cuml_svm(
+    #         clf=clf,
+    #         train=train_features_df,
+    #         test=test_features_df,
+    #         targets=stage_1_2_target_cols,
+    #         features=stage_1_train_features,
+    #         # K=4 if not config_d["debug"] else 2,
+    #         n_splits=4,
+    #         stage_1_2_target_cols=stage_1_2_target_cols,
+    #         seed=s,
+    #     )
+    #     stage1_2_rsb_svm_oof += stage1_2_svm_oof / len(random_seeds)
+    #     stage1_2_rsb_svm_pred += stage1_2_svm_pred / len(random_seeds)
 
     competition_metric = []
     for i in range(len(stage_1_2_target_cols)):
-        competition_metric.append(log_loss(train_features_df[stage_1_2_target_cols[i]], stage1_2_rsb_svm_oof[:, i]))
+        competition_metric.append(log_loss(train_features_df[stage_1_2_target_cols[i]], stage1_2_svm_trainer.oof[:, i]))
     tprint(f"competition_metric: {np.mean(competition_metric)}")
     stage1_2_rsb_nn_pred = np.zeros((len(test_features_df), len(stage_1_2_target_cols)))
     stage1_2_nn_trainer = NNTrainer(
@@ -788,7 +866,7 @@ def exec_train():
         targets=stage_1_2_target_cols,
         X=train_features_df,
         n_splits=7 if not config_d["debug"] else 2,
-        n_rsb=1,
+        n_rsb=5 if not config_d["debug"] else 1,
         config_d={
             "epoch": 20 if not config_d["debug"] else 1,
             "lr": 0.01,
@@ -806,7 +884,7 @@ def exec_train():
     calc_competition_metric(train_features_df, stage_1_2_target_cols, stage1_2_nn_trainer.oof)
 
     tprint("[metric: stage1_2_rsb_svm_oof]")
-    calc_competition_metric(train_features_df, stage_1_2_target_cols, stage1_2_rsb_svm_oof)
+    calc_competition_metric(train_features_df, stage_1_2_target_cols, stage1_2_svm_trainer.oof)
 
     tprint("--- stage 2 ---")
     tprint(
@@ -854,7 +932,7 @@ def exec_train():
         targets=stage_1_2_target_cols,
         X=stack_train_df,
         n_splits=7 if not config_d["debug"] else 2,
-        n_rsb=1,
+        n_rsb=5 if not config_d["debug"] else 1,
         config_d={
             "epoch": 20 if not config_d["debug"] else 1,
             "lr": 0.01,
@@ -873,15 +951,15 @@ def exec_train():
         f"""
     rsb_stack_oof: {stack_trainer.oof.shape}
     rsb_stack_pred: {rsb_stack_pred.shape}
-    stage1_2_rsb_svm_oof: {stage1_2_rsb_svm_oof.shape}
+    stage1_2_rsb_svm_oof: {stage1_2_svm_trainer.oof.shape}
     stage1_2_rsb_svm_pred: {stage1_2_rsb_svm_pred.shape}
     """
     )
 
-    best_weight = get_best_weights(stack_trainer.oof, stage1_2_rsb_svm_oof, train_features_df, stage_1_2_target_cols)
+    best_weight = get_best_weights(stack_trainer.oof, stage1_2_svm_trainer.oof, train_features_df, stage_1_2_target_cols)
     tprint(f"best_weight: {best_weight}")
 
-    blend_oof = stack_trainer.oof * best_weight + stage1_2_rsb_svm_oof * (1 - best_weight)
+    blend_oof = stack_trainer.oof * best_weight + stage1_2_svm_trainer.oof * (1 - best_weight)
     blend_pred = rsb_stack_pred * best_weight + stage1_2_rsb_svm_pred * (1 - best_weight)
 
     tprint("[metric: blend_oof]")

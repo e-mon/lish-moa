@@ -40,22 +40,18 @@ class BaseModel:
             oof_preds[valid_idx] = valid_preds
             preds += _preds / len(folds)
 
-            score = self.metric(y_train[valid_idx], valid_preds)
+            score = self.metric(y_train[valid_idx].values, valid_preds)
             logger.info(f"fold {fold}: {score}")
             models[f'fold_{fold}'] = model
             scores[f'fold_{fold}'] = score
-        oof_score = self.metric(y_train, oof_preds)
+        oof_score = self.metric(y_train.values, oof_preds)
         logger.info(f"{len(folds)} folds cv mean: {np.mean(scores)}")
         logger.info(f"oof score: {oof_score}")
 
-        self.result = ModelResult(oof_preds=oof_preds,
-                                  models=models,
-                                  preds=preds,
-                                  folds=folds,
-                                  scores={
-                                      'oof_score': self.metric(y_train, oof_preds),
-                                      'KFoldsScores': scores,
-                                  })
+        self.result = ModelResult(oof_preds=oof_preds, models=models, preds=preds, folds=folds, scores={
+            'oof_score': oof_score,
+            'KFoldsScores': scores,
+        })
 
         return True
 
@@ -94,21 +90,17 @@ class MoaBase:
                 oof_preds[valid_idx] = valid_preds / self.num_seed_blends
                 models[f'fold_{fold}_{i}'] = model
 
-            score = self.metric(y_train.iloc[valid_idx], valid_preds)
+            score = self.metric(y_train.iloc[valid_idx].values, valid_preds)
             logger.info(f"fold {fold}: {score}")
             scores[f'fold_{fold}'] = score
-        oof_score = self.metric(y_train, oof_preds)
-        logger.info(f"{len(folds)} folds cv mean: {np.mean(scores)}")
+        oof_score = self.metric(y_train.values, oof_preds)
+        logger.info(f"{len(folds)} folds cv mean: {np.mean(list(scores.values()))}")
         logger.info(f"oof score: {oof_score}")
 
-        self.result = ModelResult(oof_preds=oof_preds,
-                                  models=models,
-                                  preds=None,
-                                  folds=folds,
-                                  scores={
-                                      'oof_score': self.metric(y_train, oof_preds),
-                                      'KFoldsScores': scores,
-                                  })
+        self.result = ModelResult(oof_preds=oof_preds, models=models, preds=None, folds=folds, scores={
+            'oof_score': oof_score,
+            'KFoldsScores': scores,
+        })
 
         return True
 

@@ -26,7 +26,7 @@ def calc_competition_metric_np(train_features_df, target_cols, oof_arr):
     return np.mean(competition_metric)
 
 
-def logloss_for_multilabel(actual, preds):
+def logloss_for_multilabel(actual, preds, ignore_all_zeros: bool = True):
     """
     actual, preds: [n_samples, n_classes]
     log_loss(actual[:, c], preds[:, c])
@@ -34,6 +34,8 @@ def logloss_for_multilabel(actual, preds):
 
     results = []
     for i in range(actual.shape[1]):
-        results.append(log_loss(actual[:, i], preds[:, k]))
+        if actual[:, i].sum() == 0:
+            results.append(-np.mean(np.log(1 - preds[:, i])))
+        results.append(log_loss(actual[:, i], preds[:, i]))
 
     return np.mean(results)

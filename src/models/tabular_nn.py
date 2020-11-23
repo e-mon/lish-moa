@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from src.utils.misc import LoggerFactory
 from src.models.loss import SmoothBCEwLogits

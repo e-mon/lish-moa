@@ -156,7 +156,7 @@ class NNTrainer(MoaBase):
 
         # 学習時はlength=1の破片などを回避するためdrop_last=1とする
         train_dataset = TabularDataset(X_train, y_train, predictors)
-        train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
+        train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
         valid_dataset = TabularDataset(X_valid, y_valid, predictors)
         valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)

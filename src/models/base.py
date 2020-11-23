@@ -110,7 +110,7 @@ class MoaBase:
         pass
 
     def predict(self, X_test) -> np.ndarray:
-        assert self.result is None, 'Model is not tained Error'
+        assert self.result is not None, 'Model is not trained Error'
 
         folds = self.result.folds
 

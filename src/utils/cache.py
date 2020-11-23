@@ -68,8 +68,10 @@ class Cache:
         if rerun:
             return None
         if Path(f'{path}.pickle').exists():
+            logger.info(f'cache hit: {path}.pickle')
             return pickle.load(open(f'{path}.pickle', 'rb'))
         if Path(f'{path}.feather').exists():
+            logger.info(f'cache hit: {path}.feather')
             return pd.read_feather(f'{path}.feather')
         return None
 

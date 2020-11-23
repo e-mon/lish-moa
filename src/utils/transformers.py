@@ -10,23 +10,6 @@ from sklearn.utils.validation import FLOAT_DTYPES, check_array, check_is_fitted
 
 from src.utils.cache import Cache
 
-TRANSFORMERS = {
-    'quantile': QuantileTransformer,
-    'robust': RobustScaler,
-    'gauss_rank': GaussRankScaler,
-}
-
-
-# return transformer
-@Cache('./cache')
-def normalizer(transformer: str, df: pd.DataFrame, params: Optional[dict]):
-    if params is None:
-        params = dict()
-    trans = TRANSFORMERS[transformer](**params)
-    trans.fit(df)
-
-    return trans
-
 
 class GaussRankScaler(BaseEstimator, TransformerMixin):
     """Transform features by scaling each feature to a normal distribution.
@@ -135,3 +118,21 @@ class GaussRankScaler(BaseEstimator, TransformerMixin):
         is_unique = np.zeros_like(x, dtype=bool)
         is_unique[np.unique(x, return_index=True)[1]] = True
         return x[is_unique]
+
+
+TRANSFORMERS = {
+    'quantile': QuantileTransformer,
+    'robust': RobustScaler,
+    'gauss_rank': GaussRankScaler,
+}
+
+
+# return transformer
+@Cache('./cache')
+def normalizer(transformer: str, df: pd.DataFrame, params: Optional[dict]):
+    if params is None:
+        params = dict()
+    trans = TRANSFORMERS[transformer](**params)
+    trans.fit(df)
+
+    return trans

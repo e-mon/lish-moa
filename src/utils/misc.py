@@ -29,14 +29,15 @@ class Singleton(type):
 
 
 class LoggerFactory(metaclass=Singleton):
-    def __init__(self, log_path: str = None):
+    def __init__(self, log_path: str = None, loglevel=logging.INFO):
+        self.loglevel = loglevel
         if log_path is None:
             self.log_path = Path('./log')
         else:
             self.log_path = Path(log_path)
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
 
-    def getLogger(self, log_name, loglevel=logging.INFO):
+    def getLogger(self, log_name):
         fmt = '%(asctime)s [%(name)s|%(levelname)s] %(message)s'
         formatter = logging.Formatter(fmt)
         logger = logging.getLogger(log_name)
@@ -51,7 +52,7 @@ class LoggerFactory(metaclass=Singleton):
         handler.setFormatter(formatter)
         logger.addHandler(handler)
 
-        logger.setLevel(loglevel)
+        logger.setLevel(self.loglevel)
 
         return logger
 

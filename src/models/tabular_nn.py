@@ -221,3 +221,17 @@ class NNTrainer(MoaBase):
         model.load_state_dict(best_state)
         model.to(DEVICE)
         return best_preds, model
+
+    def _predict(self, model: Any, X_valid: pd.DataFrame, predictors: List[str]):
+        _params = self._get_default_params()
+        _params.update(self.params)
+        batch_size = _params['batch_size']
+        valid_dataset = TabularDataset(X_valid, None, predictors)
+        valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
+        tmp_pred = []
+        with torch.no_grad():
+            for x in valid_dataloader:
+                x = x.to(DEVICE)
+                out = model(x)
+                tmp_pred.append(out.sigmoid().detach().cpu().numpy())
+        return np.concatenate(tmp_pred)

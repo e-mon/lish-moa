@@ -229,6 +229,8 @@ class NNTrainer(MoaBase):
         valid_dataset = TabularDataset(X_valid, None, predictors)
         valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
         tmp_pred = []
+
+        model.eval()
         with torch.no_grad():
             for x in valid_dataloader:
                 x = x.to(DEVICE)

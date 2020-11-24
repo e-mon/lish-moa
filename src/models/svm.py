@@ -1,5 +1,4 @@
 from typing import List, Any
-import logging
 import pandas as pd
 import numpy as np
 from cuml.svm import SVC, SVR
@@ -10,7 +9,7 @@ from src.utils.cache import Cache
 from src.utils.misc import LoggerFactory
 from src.models.base import MoaBase, AllZerosClassifier
 
-logger = LoggerFactory().getLogger(__name__, loglevel=logging.DEBUG)
+logger = LoggerFactory().getLogger(__name__)
 
 
 class SVMTrainer(MoaBase):
@@ -33,7 +32,7 @@ class SVMTrainer(MoaBase):
                 logger.info(f'{target_col} is all zeros')
                 clf = AllZerosClassifier()
             else:
-                clf = SVC(cache_size=2000, probability=True)
+                clf = SVC(cache_size=5000, probability=True)
                 clf.fit(X_train[predictors].values, y_train[target_col].values.astype(int), convert_dtype=False)
             pred_valid[:, idx] = clf.predict_proba(X_valid[predictors].values)[:, 1]
 
@@ -53,7 +52,7 @@ class SVMTrainer(MoaBase):
         return pred_valid, models
 
     def _predict(self, model: Any, X_valid: pd.DataFrame, predictors: List[str]):
-        assert type(model) is List, 'model is not List'
+        assert type(model) is list, 'model is not list'
 
         preds = np.zeros(shape=(X_valid.shape[0], len(model)))
         for idx, path in enumerate(model):

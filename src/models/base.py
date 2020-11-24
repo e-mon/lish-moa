@@ -88,7 +88,7 @@ class MoaBase:
             for i in range(self.num_seed_blends):
                 valid_preds, model = self._train(X=X_train, y=y_train, predictors=self.predictors, train_idx=train_idx, valid_idx=valid_idx, seed=i)
 
-                oof_preds[valid_idx, :] = valid_preds / self.num_seed_blends
+                oof_preds[valid_idx, :] += valid_preds / self.num_seed_blends
                 models[f'fold_{fold}_{i}'] = model
 
             score = self.metric(y_train.iloc[valid_idx].values, valid_preds)

@@ -91,7 +91,7 @@ class MoaBase:
                 oof_preds[valid_idx, :] += valid_preds / self.num_seed_blends
                 models[f'fold_{fold}_{i}'] = model
 
-            score = self.metric(y_train.iloc[valid_idx].values, valid_preds)
+            score = self.metric(y_train.iloc[valid_idx].values, oof_preds[valid_idx, :])
             logger.info(f"fold {fold}: {score}")
             scores[f'fold_{fold}'] = score
         oof_score = self.metric(y_train.values, oof_preds)

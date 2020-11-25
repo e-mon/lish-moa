@@ -8,7 +8,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from src.utils.misc import LoggerFactory
 from src.models.loss import SmoothBCEwLogits, LogitsLogLoss
 from src.models.base import MoaBase
-from src.moedls.pytorch_tabnet import TabNetRegressor
+from src.models.pytorch_tabnet.tab_model import TabNetRegressor
 from src.utils.environment import get_device
 
 DEVICE = get_device()
@@ -78,5 +78,5 @@ class Tabnet(MoaBase):
         return self._sigmoid(preds)
 
     @staticmethod
-    def _sigmoid(preds: np.nd_array):
+    def _sigmoid(preds: np.ndarray):
         return 1 / (1 + np.exp(-preds))

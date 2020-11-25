@@ -48,4 +48,4 @@ class SVMTrainer(MoaBaseOnline):
             pred_valid[:, idx] = clf.predict_proba(X_valid[predictors].values)[:, 1]
             preds[:, idx] = clf.predict_proba(X_test[predictors].values)[:, 1]
 
-        return pred_valid, preds
+        return preds, pred_valid

@@ -155,7 +155,13 @@ class MoaBaseOnline:
         for fold, (train_idx, valid_idx) in enumerate(folds):
             logger.info(f'fold {fold}: #row of train: {len(train_idx)}, #row of valid: {len(valid_idx)}')
             for i in range(self.num_seed_blends):
-                _preds, valid_preds, = self._train_predict(X=X_train, y=y_train, predictors=self.predictors, train_idx=train_idx, valid_idx=valid_idx, seed=i)
+                _preds, valid_preds, = self._train_predict(X=X_train,
+                                                           y=y_train,
+                                                           X_test=X_test,
+                                                           predictors=self.predictors,
+                                                           train_idx=train_idx,
+                                                           valid_idx=valid_idx,
+                                                           seed=i)
 
                 oof_preds[valid_idx, :] += valid_preds / self.num_seed_blends
                 preds += _preds / (self.num_seed_blends * self.num_seed_blends)

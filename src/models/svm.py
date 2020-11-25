@@ -5,12 +5,12 @@ from cuml.svm import SVC, SVR
 from tqdm import tqdm
 
 from src.utils.misc import LoggerFactory
-from src.models.base import MoaBase, AllZerosClassifier
+from src.models.base import MoaBaseOnline, AllZerosClassifier
 
 logger = LoggerFactory().getLogger(__name__)
 
 
-class SVMTrainer(MoaBase):
+class SVMTrainer(MoaBaseOnline):
     def __init__(self, params: Optional[dict] = None, **kwargs):
         if params is None:
             self.params = {}

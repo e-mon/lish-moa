@@ -27,17 +27,20 @@ class BaseModel:
     def _train(self, train: pd.DataFrame, targets: pd.DataFrame, train_idx, valid_idx):
         raise NotImplementedError
 
-    def train(self, X_train: pd.DataFrame, y_train: pd.DataFrame, X_test: pd.DataFrame, splitter: SplitFactory):
+    def train(self, X_train: pd.DataFrame, y_train: pd.DataFrame, X_test: pd.DataFrame, splitter: Optional[SplitFactory],
+              folds: Optional[List[Tuple[np.ndarray, np.ndarray]]]):
 
         models = dict()
         scores = dict()
-        oof_preds = np.zeros(shape=(X_train.shape[0], ))
-        preds = np.zeros(shape=(X_test.shape[0], ))
-        folds = splitter.split(X_train, y_train)
+        oof_preds = np.zeros_like(y_train).astype(float)
+        preds = np.zeros(shape=(X_test.shape[0], y_train.shape[1]))
+        assert (folds is not None) or (splitter is not None), 'splitter or folds is must be specified'
+        if folds is None:
+            folds = splitter.split(X_train, y_train)
 
         for fold, (train_idx, valid_idx) in enumerate(folds):
             valid_preds, _preds, model = self._train(X_train, X_test, y_train, train_idx, valid_idx)
-            oof_preds[valid_idx] = valid_preds
+            oof_preds[valid_idx] += valid_preds
             preds += _preds / len(folds)
 
             score = self.metric(y_train[valid_idx].values, valid_preds)
@@ -123,6 +126,53 @@ class MoaBase:
                 preds += self._predict(model=model, X_valid=X_test, predictors=self.predictors) / (len(folds) * self.num_seed_blends)
 
         return preds
+
+
+class MoaBaseOnline:
+    def __init__(self, target_cols: List[str], categorical_cols: List[str], ignore_cols: Optional[List[str]], num_seed_blends: int, metric: Callable,
+                 exp: Experiment):
+        self.exp = exp
+        self.ignore_cols = ignore_cols
+        self.categorical_cols = categorical_cols
+        self.metric = metric
+        self.result = None
+        self.num_seed_blends = num_seed_blends
+
+    @abstractmethod
+    def _train_predict(self, X: pd.DataFrame, y: pd.DataFrame, X_test: pd.DataFrame, predictors: List[str], train_idx: np.ndarray, valid_idx: np.ndarray,
+                       seed: int):
+        raise NotImplementedError
+
+    def train_predict(self, X_train: pd.DataFrame, y_train: pd.DataFrame, X_test: pd.DataFrame, folds: List[Tuple[np.ndarray, np.ndarray]]):
+
+        scores = dict()
+        oof_preds = np.zeros_like(y_train).astype(float)
+        preds = np.zeros(shape=(X_test.shape[0], y_train.shape[1]))
+        self.predictors = [col for col in X_train.columns.tolist() if col not in self.ignore_cols]
+
+        logger.info(f'{self.__class__.__name__} train start')
+        logger.info(f'X shape: {X_train.shape}, y shape: {y_train.shape}')
+        for fold, (train_idx, valid_idx) in enumerate(folds):
+            logger.info(f'fold {fold}: #row of train: {len(train_idx)}, #row of valid: {len(valid_idx)}')
+            for i in range(self.num_seed_blends):
+                _preds, valid_preds, = self._train_predict(X=X_train, y=y_train, predictors=self.predictors, train_idx=train_idx, valid_idx=valid_idx, seed=i)
+
+                oof_preds[valid_idx, :] += valid_preds / self.num_seed_blends
+                preds += _preds / (self.num_seed_blends * self.num_seed_blends)
+
+            score = self.metric(y_train.iloc[valid_idx].values, oof_preds[valid_idx, :])
+            logger.info(f"fold {fold}: {score}")
+            scores[f'fold_{fold}'] = score
+        oof_score = self.metric(y_train.values, oof_preds)
+        logger.info(f"{len(folds)} folds cv mean: {np.mean(list(scores.values()))}")
+        logger.info(f"oof score: {oof_score}")
+
+        self.result = ModelResult(oof_preds=oof_preds, models=None, preds=preds, folds=folds, scores={
+            'oof_score': oof_score,
+            'KFoldsScores': scores,
+        })
+
+        return True
 
 
 class AllZerosClassifier:

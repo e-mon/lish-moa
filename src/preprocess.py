@@ -23,7 +23,7 @@ def get_cp_dose_feature(s):
 
 
 @Cache(dir_path='./cache/')
-def common(input_dir='../input/lish-moa/'):
+def common(input_dir='../input/lish-moa/', sub: bool = False):
     # train/predに共通する読み込みを実施
     train_features_df = pd.read_csv(f"{input_dir}/train_features.csv")
     test_features_df = pd.read_csv(f"{input_dir}/test_features.csv")

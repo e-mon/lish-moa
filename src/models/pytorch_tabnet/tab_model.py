@@ -1,9 +1,9 @@
 import torch
 import numpy as np
 from scipy.special import softmax
-from pytorch_tabnet.utils import PredictDataset, filter_weights
-from pytorch_tabnet.abstract_model import TabModel
-from pytorch_tabnet.multiclass_utils import infer_output_dim, check_output_dim
+from .utils import PredictDataset, filter_weights
+from .abstract_model import TabModel
+from .multiclass_utils import infer_output_dim, check_output_dim
 from torch.utils.data import DataLoader
 
 
@@ -55,12 +55,8 @@ class TabNetClassifier(TabModel):
         self.output_dim = output_dim
         self._default_metric = ('auc' if self.output_dim == 2 else 'accuracy')
         self.classes_ = train_labels
-        self.target_mapper = {
-            class_label: index for index, class_label in enumerate(self.classes_)
-        }
-        self.preds_mapper = {
-            index: class_label for index, class_label in enumerate(self.classes_)
-        }
+        self.target_mapper = {class_label: index for index, class_label in enumerate(self.classes_)}
+        self.preds_mapper = {index: class_label for index, class_label in enumerate(self.classes_)}
         self.updated_weights = self.weight_updater(weights)
 
     def stack_batches(self, list_y_true, list_y_score):
@@ -119,13 +115,7 @@ class TabNetRegressor(TabModel):
     def compute_loss(self, y_pred, y_true):
         return self.loss_fn(y_pred, y_true)
 
-    def update_fit_params(
-        self,
-        X_train,
-        y_train,
-        eval_set,
-        weights
-    ):
+    def update_fit_params(self, X_train, y_train, eval_set, weights):
         self.output_dim = y_train.shape[1]
 
         self.updated_weights = weights

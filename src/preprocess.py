@@ -22,11 +22,37 @@ def get_cp_dose_feature(s):
     return 1 if s == "D1" else 0
 
 
+def get_feature(df):
+    features_g = list([x for x in df.columns if x.startswith("g-")])
+    features_c = list([x for x in df.columns if x.startswith("c-")])
+
+    # fe 変数の四則演算など
+    df["g_sum"] = df[features_g].sum(axis=1)
+    df["g_mean"] = df[features_g].mean(axis=1)
+    df["g_median"] = df[features_g].median(axis=1)
+    df["g_std"] = df[features_g].std(axis=1)
+    df["g_kurt"] = df[features_g].kurtosis(axis=1)
+    df["g_skew"] = df[features_g].skew(axis=1)
+    df["c_sum"] = df[features_c].sum(axis=1)
+    df["c_mean"] = df[features_c].mean(axis=1)
+    df["c_std"] = df[features_c].std(axis=1)
+    df["c_median"] = df[features_c].median(axis=1)
+    df["c_kurt"] = df[features_c].kurtosis(axis=1)
+    df["c_skew"] = df[features_c].skew(axis=1)
+    df["gc_sum"] = df[features_g + features_c].sum(axis=1)
+    df["gc_mean"] = df[features_g + features_c].mean(axis=1)
+    df["gc_std"] = df[features_g + features_c].std(axis=1)
+    df["gc_kurt"] = df[features_g + features_c].kurtosis(axis=1)
+    df["gc_skew"] = df[features_g + features_c].skew(axis=1)
+    df["gc_median"] = df[features_g + features_c].median(axis=1)
+
+    return df
+
+
 @Cache(dir_path='./cache/')
-def common(input_dir='../input/lish-moa/', sub: bool = False):
+def preprocess_train(input_dir='../input/lish-moa/', sub: bool = False):
     # train/predに共通する読み込みを実施
     train_features_df = pd.read_csv(f"{input_dir}/train_features.csv")
-    test_features_df = pd.read_csv(f"{input_dir}/test_features.csv")
     train_drug_df = pd.read_csv(f"{input_dir}/train_drug.csv")
     train_targets_scored_df = pd.read_csv(f"{input_dir}/train_targets_scored.csv")
     train_targets_nonscored_df = pd.read_csv(f"{input_dir}/train_targets_nonscored.csv")
@@ -38,7 +64,6 @@ def common(input_dir='../input/lish-moa/', sub: bool = False):
     train_drug_df: {train_drug_df.shape}
     train_targets_scored_df: {train_targets_scored_df.shape}
     train_targets_nonscored_df: {train_targets_nonscored_df.shape}
-    test_features_df: {test_features_df.shape}
     sample_submission_df: {sample_submission_df.shape}
     """)
 
@@ -66,9 +91,7 @@ def common(input_dir='../input/lish-moa/', sub: bool = False):
 
     # cp系特徴量追加
     train_features_df["cp_time_feature"] = train_features_df["cp_time"].map(get_cp_time_feature)
-    test_features_df["cp_time_feature"] = test_features_df["cp_time"].map(get_cp_time_feature)
     train_features_df["cp_dose_feature"] = train_features_df["cp_dose"].map(get_cp_dose_feature)
-    test_features_df["cp_dose_feature"] = test_features_df["cp_dose"].map(get_cp_dose_feature)
 
     # 不要カラム除去
     train_features_df = train_features_df.drop(columns=["cp_type", "cp_time", "cp_dose"])
@@ -86,12 +109,6 @@ def common(input_dir='../input/lish-moa/', sub: bool = False):
             train_features_df[col_name] = d
             var_list.append(diff_val)
 
-    # これに従い、必要なカラムのみを作る
-    for c in tqdm(list(itertools.combinations(features_g + features_c, 2))):
-        col_name = f"{c[0]}_{c[1]}_diff"
-        if col_name in train_features_df.columns:
-            test_features_df[col_name] = test_features_df[c[0]] - test_features_df[c[1]]
-
     stage_1_2_target_cols = [x for x in train_targets_scored_df.columns if x not in ["sig_id", "drug_id"]]
     stage_1_1_target_cols = [x for x in train_targets_nonscored_df.columns if x not in ["sig_id", "drug_id"]] + stage_1_2_target_cols
 
@@ -99,9 +116,26 @@ def common(input_dir='../input/lish-moa/', sub: bool = False):
 
     return (
         train_features_df,
-        test_features_df,
         sample_submission_df,
         stage_1_1_target_cols,
         stage_1_2_target_cols,
         stage_1_train_features,
     )
+
+
+def preprocess_test(train_features_df, input_dir='../input/lish-moa/'):
+    test_features_df = pd.read_csv(f"{input_dir}/test_features.csv")
+    test_features_df["cp_time_feature"] = test_features_df["cp_time"].map(get_cp_time_feature)
+    test_features_df["cp_dose_feature"] = test_features_df["cp_dose"].map(get_cp_dose_feature)
+
+    # g-, c-系特徴量取得
+    features_g = list([x for x in train_features_df.columns if x.startswith("g-")])
+    features_c = list([x for x in train_features_df.columns if x.startswith("c-")])
+
+    # これに従い、必要なカラムのみを作る
+    for c in tqdm(list(itertools.combinations(features_g + features_c, 2))):
+        col_name = f"{c[0]}_{c[1]}_diff"
+        if col_name in train_features_df.columns:
+            test_features_df[col_name] = test_features_df[c[0]] - test_features_df[c[1]]
+
+    return test_features_df

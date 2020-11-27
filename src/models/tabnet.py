@@ -74,7 +74,7 @@ class Tabnet(MoaBase):
         return preds, model
 
     def _predict(self, model: Any, X_valid: pd.DataFrame, predictors: List[str]):
-        preds = model.predict(X_valid[predictors])
+        preds = model.predict(X_valid[predictors].values)
         return self._sigmoid(preds)
 
     @staticmethod

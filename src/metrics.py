@@ -32,8 +32,8 @@ def logloss_for_multilabel(actual, preds, ignore_all_zeros: bool = True):
     log_loss(actual[:, c], preds[:, c])
     """
 
-    actual = torch.tensor(actual)
-    preds = torch.tensor(preds)
+    actual = torch.tensor(actual, dtype=float)
+    preds = torch.tensor(preds, dtype=float)
     preds = torch.clamp(preds, 1e-9, 1 - (1e-9))
 
     return np.mean(nn.BCELoss()(preds, actual).item())

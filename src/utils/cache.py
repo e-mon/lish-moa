@@ -99,7 +99,8 @@ class Cache:
 
     @staticmethod
     def _data_frame(obj: pd.DataFrame):
-        return _hash(str(obj.columns.tolist()) + str(obj.index) + str(obj.shape))
+        string = str(obj.columns.tolist()) + str(obj.index) + str(obj.shape)
+        return _hash(string.encode())
         # return hash_pandas_object(obj).sum()
 
     @staticmethod

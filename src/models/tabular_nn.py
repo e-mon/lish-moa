@@ -1,5 +1,6 @@
 from typing import Any, List, Optional
 
+from src.models.optimizer import RAdam
 from src.utils.misc import LoggerFactory
 from src.models.loss import SmoothBCEwLogits
 from src.models.base import MoaBase
@@ -234,6 +235,187 @@ class NNTrainer(MoaBase):
         with torch.no_grad():
             for x in valid_dataloader:
                 x = x.to(DEVICE)
+                out = model(x)
+                tmp_pred.append(out.sigmoid().detach().cpu().numpy())
+        return np.concatenate(tmp_pred)
+
+
+class CNNDataset(Dataset):
+    def __init__(self, X: np.ndarray, y: Optional[pd.DataFrame]):
+
+        self.X = X
+
+        if y is not None:
+            self.y = y.values
+        else:
+            self.y = y
+
+    def __len__(self):
+        return self.X.shape[0]
+
+    def __getitem__(self, idx):
+        if self.y is None:
+            return torch.tensor(self.X[idx], dtype=torch.float).to(DEVICE)
+        else:
+            return (
+                torch.tensor(self.X[idx], dtype=torch.float).to(DEVICE),
+                torch.tensor(self.y[idx], dtype=torch.float).to(DEVICE),
+            )
+
+
+class CNNStacking(nn.Module):
+    def __init__(self, n_features, n_labels):
+        super(CNNStacking, self).__init__()
+
+        self.sq = nn.Sequential(
+            nn.Conv2d(in_channels=1, out_channels=8, kernel_size=(2, 1), bias=False),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=8, out_channels=16, kernel_size=(2, 1), bias=False),
+            nn.ReLU(),
+            # nn.Conv2d(in_channels=16, out_channels=32, kernel_size=(3, 1), bias=False),
+            # nn.ReLU(inplace=True),
+            # nn.Conv2d(in_channels=32, out_channels=64, kernel_size=(3, 1), bias=False),
+            # nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(in_features=16 * n_labels, out_features=4 * n_labels),
+            nn.ReLU(),
+            nn.Linear(in_features=4 * n_labels, out_features=n_labels),
+        )
+
+    def forward(self, x):
+        return self.sq(x)
+
+
+class CNNTrainer(MoaBase):
+    def __init__(self, params: Optional[dict] = None, **kwargs):
+        if params is None:
+            self.params = {}
+        else:
+            self.params = params
+        super().__init__(**kwargs)
+
+    def _get_default_params(self):
+        return {
+            'lr': 1e-4,
+            'batch_size': 256,
+            'epoch': 20,
+        }
+
+    def _train(self, X: pd.DataFrame, y: pd.DataFrame, predictors: List[str], train_idx: np.ndarray, valid_idx: np.ndarray, seed: int):
+        X_train, X_valid = X.iloc[train_idx], X.iloc[valid_idx]
+        y_train, y_valid = y.iloc[train_idx], y.iloc[valid_idx]
+        target_cols = y_valid.columns.tolist()
+
+        _params = self._get_default_params()
+        _params.update(self.params)
+
+        # define model & schedulers
+        self.n_predictors = len(predictors)
+        self.n_targets = len(target_cols)
+        self.n_models = self.n_predictors // self.n_targets
+
+        num_epoch = _params['epoch']
+        batch_size = _params['batch_size']
+        net = CNNStacking(n_features=self.n_predictors, n_labels=self.n_targets)
+        net.to(DEVICE)
+
+        # optimizer = optim.Adam(net.parameters(), lr=_params['lr'], weight_decay=1e-6)
+        optimizer = RAdam(net.parameters(), lr=_params['lr'])
+        valid_criterion = nn.BCEWithLogitsLoss()
+        criterion = SmoothBCEwLogits(smoothing=0.001)
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=0.0001)
+        # scheduler = MultiStepLR(optimizer, milestones=[10, 15], gamma=0.1)
+
+        # [N, Models, Labels, Channel] -> [N, Channel, Models, Labels]
+        X_train = X_train[predictors].values.reshape(-1, self.n_models, self.n_targets, 1).transpose(0, 3, 1, 2)
+        X_valid = X_valid[predictors].values.reshape(-1, self.n_models, self.n_targets, 1).transpose(0, 3, 1, 2)
+
+        # 学習時はlength=1の破片などを回避するためdrop_last=1とする
+        train_dataset = CNNDataset(X_train, y_train)
+        train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+
+        valid_dataset = CNNDataset(X_valid, y_valid)
+        valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
+
+        bar = trange(num_epoch, desc=f"seed: {seed} train : {X_train.shape[0]}  valid:{X_valid.shape[0]}====")
+        train_loss = []
+        valid_loss = []
+
+        best_loss = np.inf
+        best_preds = None
+        best_loss_epoch = 1
+
+        for epoch in bar:
+            running_loss = []
+            valid_loss = []
+
+            # train
+            net.train()
+            for x, y in train_dataloader:
+                x = x.to(DEVICE)
+                y = y.to(DEVICE)
+
+                optimizer.zero_grad()
+                out = net(x)
+                loss = criterion(out, y)
+                loss.backward()
+                running_loss.append(loss.item())
+                optimizer.step()
+            scheduler.step()
+
+            preds_valid = []
+            _valid_loss = []
+
+            net.eval()
+            with torch.no_grad():
+                for x, y in valid_dataloader:
+                    x = x.to(DEVICE)
+                    y = y.to(DEVICE)
+
+                    out = net(x)
+                    loss = valid_criterion(out, y)
+                    preds_valid.append(out.sigmoid().detach().cpu().numpy())
+                    _valid_loss.append(loss.item())
+
+                bar.set_postfix(
+                    running_loss=f"{np.mean(running_loss):.5f}",
+                    valid_loss=f"{np.mean(_valid_loss):.5f}",
+                    best_loss=f"{best_loss:.5f}",
+                    best_loss_epoch=f"{best_loss_epoch}",
+                )
+
+            train_loss.append(np.mean(running_loss))
+            valid_loss.append(np.mean(_valid_loss))
+
+            if best_loss > np.mean(_valid_loss):
+                best_loss = np.mean(_valid_loss)
+                best_loss_epoch = epoch + 1
+                best_preds = np.concatenate(preds_valid)
+                best_state = copy.deepcopy(net.state_dict())
+
+        logger.info(f"best loss : {best_loss}")
+        model = CNNStacking(n_features=self.n_predictors, n_labels=self.n_targets)
+        model.load_state_dict(best_state)
+        model.to(DEVICE)
+        return best_preds, model
+
+    def _predict(self, model: Any, X_valid: pd.DataFrame, predictors: List[str]):
+        _params = self._get_default_params()
+        _params.update(self.params)
+
+        # [N, Models, Labels, Channel] -> [N, Channel, Models, Labels]
+        X_valid = X_valid[predictors].values.reshape(-1, self.n_models, self.n_targets, 1).transpose(0, 3, 1, 2)
+
+        batch_size = _params['batch_size']
+        valid_dataset = CNNDataset(X_valid, None)
+        valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
+        tmp_pred = []
+
+        model.eval()
+        with torch.no_grad():
+            for x in valid_dataloader:
+                x = x.to(DEVICE)
+
                 out = model(x)
                 tmp_pred.append(out.sigmoid().detach().cpu().numpy())
         return np.concatenate(tmp_pred)

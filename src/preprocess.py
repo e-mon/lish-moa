@@ -56,7 +56,6 @@ def preprocess_train(input_dir='../input/lish-moa/', sub: bool = False):
     train_drug_df = pd.read_csv(f"{input_dir}/train_drug.csv")
     train_targets_scored_df = pd.read_csv(f"{input_dir}/train_targets_scored.csv")
     train_targets_nonscored_df = pd.read_csv(f"{input_dir}/train_targets_nonscored.csv")
-    sample_submission_df = pd.read_csv(f"{input_dir}/sample_submission.csv")
 
     logger.info(f"""
     [初回読み込み]
@@ -64,7 +63,6 @@ def preprocess_train(input_dir='../input/lish-moa/', sub: bool = False):
     train_drug_df: {train_drug_df.shape}
     train_targets_scored_df: {train_targets_scored_df.shape}
     train_targets_nonscored_df: {train_targets_nonscored_df.shape}
-    sample_submission_df: {sample_submission_df.shape}
     """)
 
     # nonscoreで全部0のラベルは外す
@@ -116,7 +114,6 @@ def preprocess_train(input_dir='../input/lish-moa/', sub: bool = False):
 
     return (
         train_features_df,
-        sample_submission_df,
         stage_1_1_target_cols,
         stage_1_2_target_cols,
         stage_1_train_features,
@@ -125,6 +122,7 @@ def preprocess_train(input_dir='../input/lish-moa/', sub: bool = False):
 
 def preprocess_test(train_features_df, input_dir='../input/lish-moa/'):
     test_features_df = pd.read_csv(f"{input_dir}/test_features.csv")
+    sample_submission_df = pd.read_csv(f"{input_dir}/sample_submission.csv")
     test_features_df["cp_time_feature"] = test_features_df["cp_time"].map(get_cp_time_feature)
     test_features_df["cp_dose_feature"] = test_features_df["cp_dose"].map(get_cp_dose_feature)
 
@@ -138,4 +136,4 @@ def preprocess_test(train_features_df, input_dir='../input/lish-moa/'):
         if col_name in train_features_df.columns:
             test_features_df[col_name] = test_features_df[c[0]] - test_features_df[c[1]]
 
-    return test_features_df
+    return test_features_df, sample_submission_df

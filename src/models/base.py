@@ -164,7 +164,7 @@ class MoaBaseOnline:
                                                            seed=i)
 
                 oof_preds[valid_idx, :] += valid_preds / self.num_seed_blends
-                preds += _preds / (self.num_seed_blends * self.num_seed_blends)
+                preds += _preds / (len(folds) * self.num_seed_blends)
 
             score = self.metric(y_train.iloc[valid_idx].values, oof_preds[valid_idx, :])
             logger.info(f"fold {fold}: {score}")

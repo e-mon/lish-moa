@@ -110,7 +110,7 @@ class XGBTrainer(MoaBase):
 
         preds = np.zeros(shape=(X_valid.shape[0], len(model)))
         for idx, clf in enumerate(model):
-            xgb_valid = xgb.DMatrix(X_valid.values, nthread=-1)
+            xgb_valid = xgb.DMatrix(X_valid[predictors].values, nthread=-1)
             preds[:, idx] = clf.predict(xgb_valid)
 
         return preds

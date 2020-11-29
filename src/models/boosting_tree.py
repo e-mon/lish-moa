@@ -97,15 +97,10 @@ class XGBTrainer(MoaBase):
         models = []
 
         for idx, target_col in tqdm(enumerate(target_cols), total=len(target_cols)):
-            if y_train[target_col].sum() < 5:
-                logger.info(f'{target_col} is all zeros')
-                clf = AllZerosClassifier()
-                pred_valid[:, idx] = clf.predict(X_valid)
-            else:
-                xgb_train = xgb.DMatrix(X_train.values, label=y_train[target_col].values.astype(int), nthread=-1)
-                xgb_valid = xgb.DMatrix(X_valid.values, label=y_valid[target_col].values.astype(int), nthread=-1)
-                clf = xgb.train(_params, xgb_train, 1000, [(xgb_valid, "eval")], early_stopping_rounds=25, verbose_eval=0)
-                pred_valid[:, idx] = clf.predict(xgb_valid)
+            xgb_train = xgb.DMatrix(X_train.values, label=y_train[target_col].values.astype(int), nthread=-1)
+            xgb_valid = xgb.DMatrix(X_valid.values, label=y_valid[target_col].values.astype(int), nthread=-1)
+            clf = xgb.train(_params, xgb_train, 1000, [(xgb_valid, "eval")], early_stopping_rounds=25, verbose_eval=0)
+            pred_valid[:, idx] = clf.predict(xgb_valid)
             models.append(clf)
 
         return pred_valid, models
@@ -115,6 +110,7 @@ class XGBTrainer(MoaBase):
 
         preds = np.zeros(shape=(X_valid.shape[0], len(model)))
         for idx, clf in enumerate(model):
-            preds[:, idx] = clf.predict(X_valid[predictors].values)
+            xgb_valid = xgb.DMatrix(X_valid.values, nthread=-1)
+            preds[:, idx] = clf.predict(xgb_valid)
 
         return preds

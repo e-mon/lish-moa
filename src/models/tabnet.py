@@ -65,7 +65,7 @@ class Tabnet(MoaBase):
             patience=20,
             batch_size=_params['batch_size'],
             virtual_batch_size=32,
-            num_workers=1,
+            num_workers=0,
             drop_last=False,
             # To use binary cross entropy because this is not a regression problem
             loss_fn=loss_fn)

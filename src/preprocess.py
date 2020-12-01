@@ -26,7 +26,6 @@ def get_feature(df):
     features_g = list([x for x in df.columns if x.startswith("g-")])
     features_c = list([x for x in df.columns if x.startswith("c-")])
 
-    # fe 変数の四則演算など
     df["g_sum"] = df[features_g].sum(axis=1)
     df["g_mean"] = df[features_g].mean(axis=1)
     df["g_median"] = df[features_g].median(axis=1)
@@ -51,50 +50,39 @@ def get_feature(df):
 
 @Cache(dir_path='./cache/')
 def preprocess_train(input_dir='../input/lish-moa/', sub: bool = False):
-    # train/predに共通する読み込みを実施
     train_features_df = pd.read_csv(f"{input_dir}/train_features.csv")
     train_drug_df = pd.read_csv(f"{input_dir}/train_drug.csv")
     train_targets_scored_df = pd.read_csv(f"{input_dir}/train_targets_scored.csv")
     train_targets_nonscored_df = pd.read_csv(f"{input_dir}/train_targets_nonscored.csv")
 
     logger.info(f"""
-    [初回読み込み]
     train_features_df: {train_features_df.shape}
     train_drug_df: {train_drug_df.shape}
     train_targets_scored_df: {train_targets_scored_df.shape}
     train_targets_nonscored_df: {train_targets_nonscored_df.shape}
     """)
 
-    # nonscoreで全部0のラベルは外す
     drop_cols = list(train_targets_nonscored_df.columns[train_targets_nonscored_df.sum() == 0])
     use_cols = [x for x in train_targets_nonscored_df.columns if x not in drop_cols]
     train_targets_nonscored_df = train_targets_nonscored_df.loc[:, use_cols]
     logger.info(f"""
-    [全部0のラベル除去]
     train_targets_nonscored_df: {train_targets_nonscored_df.shape}
     """)
 
-    # indexを使ってmerge
-    # chainで書いてしまうとformatが狂ったり大変だったため、1行ずつに...
     train_features_df = train_features_df.merge(train_targets_scored_df)
     train_features_df = train_features_df.merge(train_drug_df)
     train_features_df = train_features_df.merge(train_targets_nonscored_df)
     logger.info(f"""
-    [merge後]
     train_features_df: {train_features_df.shape}
     """)
 
-    # cp_type=ctl_vehicleのデータは学習から外す
     train_features_df = train_features_df[train_features_df.cp_type == "trt_cp"].reset_index(drop=True)
 
-    # cp系特徴量追加
     train_features_df["cp_time_feature"] = train_features_df["cp_time"].map(get_cp_time_feature)
     train_features_df["cp_dose_feature"] = train_features_df["cp_dose"].map(get_cp_dose_feature)
 
-    # 不要カラム除去
     train_features_df = train_features_df.drop(columns=["cp_type", "cp_time", "cp_dose"])
 
-    # g-, c-系特徴量取得
     features_g = list([x for x in train_features_df.columns if x.startswith("g-")])
     features_c = list([x for x in train_features_df.columns if x.startswith("c-")])
 
@@ -126,11 +114,9 @@ def preprocess_test(train_features_df, input_dir='../input/lish-moa/'):
     test_features_df["cp_time_feature"] = test_features_df["cp_time"].map(get_cp_time_feature)
     test_features_df["cp_dose_feature"] = test_features_df["cp_dose"].map(get_cp_dose_feature)
 
-    # g-, c-系特徴量取得
     features_g = list([x for x in train_features_df.columns if x.startswith("g-")])
     features_c = list([x for x in train_features_df.columns if x.startswith("c-")])
 
-    # これに従い、必要なカラムのみを作る
     for c in tqdm(list(itertools.combinations(features_g + features_c, 2))):
         col_name = f"{c[0]}_{c[1]}_diff"
         if col_name in train_features_df.columns:

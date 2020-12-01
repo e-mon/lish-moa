@@ -91,7 +91,6 @@ class XGBTrainer(MoaBase):
         _params.update(self.params)
         _params['seed'] = seed
 
-        # multilabel分回す
         target_cols = y_valid.columns.tolist()
         pred_valid = np.zeros_like(y_valid).astype(float)
         models = []

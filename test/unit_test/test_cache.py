@@ -19,12 +19,12 @@ class TestCache(unittest.TestCase):
 
     def test_dataframe(self):
         df = pd.DataFrame(dict(col_1=[1, 2, 3], col_2=['a', 'b', 'c']))
-        expected = -5174853151898171182
+        expected = '6b7f6abb1cfff565fafb7be863d2c62b'
         result = Cache._get_hash(df)
 
         self.assertEqual(result, expected)
 
-        df = pd.DataFrame(dict(col_1=[3, 2, 1], col_2=['a', 'b', 'c']))
+        df = pd.DataFrame(dict(col_1=[1, 2, 3], col_3=['a', 'b', 'c']))
         result = Cache._get_hash(df)
         self.assertNotEqual(result, expected)
 

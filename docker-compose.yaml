@@ -13,7 +13,7 @@ services:
       - "8080:8080"
     volumes:
       - ./working:/working
-      - /data:/input
+      - ./input:/input
       - /usr/local/cuda:/usr/local/cuda
     working_dir: /
 

@@ -1,0 +1,6 @@
+{
+    "RAW_DATA_DIR": "./input/lish-moa/",
+    "MODEL_CHECKPOINT_DIR": "./working/cache/",
+    "LOGS_DIR": "./working/",
+    "SUBMISSION_DIR": "./working/"
+}

@@ -1,0 +1,6 @@
+.
+├── input
+│   └── lish-moa # input data
+└── working
+    ├── src      # libraries
+    └── cache    # pretrained models

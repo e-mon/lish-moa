@@ -23,6 +23,7 @@ Kernel: [here](https://www.kaggle.com/kento1993/nn-svm-tabnet-xgb-with-pca-cnn-s
     - Nothing
 - Key assumptions
     - It is assumed that all of our codes are executed on Kaggle notebook or Docker environment above mentioned. please check `docker-compose.yaml` file to reproduct Kaggle notebook environment in your pc via Docker image.
+    - If you want to not use pretrained model, just remove cache directory and rerun.
 
 ## B3 Configuration files
 - Nothing

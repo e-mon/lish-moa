@@ -39,8 +39,8 @@ directory structure
 ├── input
 │   └── lish-moa # input data
 └── working
-    ├── src      # libraries
-    └── cache    # pretrained models
+    ├── src      # libraries (https://github.com/e-mon/lish-moa)
+    └── cache    # pretrained models (https://www.kaggle.com/eemonn/moa-cache)
 ```
 
 input & output directory is specified in `docker-compose.yaml`.

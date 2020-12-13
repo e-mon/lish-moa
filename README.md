@@ -1,6 +1,6 @@
 # Mechanisms of Action (MoA) Prediction
 
-4th place solution for Mechanisms of Action (MoA) Prediction https://www.kaggle.com/c/lish-moa/discussion/200616
+4th place solution for Mechanisms of Action (MoA) Prediction https://www.kaggle.com/c/lish-moa/
 
 Solution summary: [here](https://www.kaggle.com/c/lish-moa/discussion/200808)
 

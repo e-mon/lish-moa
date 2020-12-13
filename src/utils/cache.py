@@ -1,4 +1,4 @@
-from typing import Any, Union, Dict, List, Callable, Optional, ByteString
+from typing import Any, Union, Dict, List, Callable, Optional, ByteString, Tuple
 import hashlib
 import pickle
 from pandas.util import hash_pandas_object
@@ -91,7 +91,7 @@ class Cache:
         elif isinstance(obj, np.ndarray):
             return cls._ndarray(obj)
         elif isinstance(obj, (list, dict, tuple)):
-            return cls._mutables(obj)
+            return cls._containers(obj)
         else:
             return _hash(pickle.dumps(obj))
 
@@ -105,11 +105,10 @@ class Cache:
 
     @staticmethod
     def _ndarray(obj: np.ndarray):
-        # not implemented
         return _hash(bytes(obj))
 
     @staticmethod
-    def _mutables(obj: List[Any]):
+    def _containers(obj: Union[List[Any], Dict[Any, Any], Tuple[Any, ...]]):
         return _hash(json.dumps(obj, cls=_DictParamEncoder).encode())
 
     @staticmethod

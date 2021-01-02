@@ -21,7 +21,7 @@ from src.utils.misc import LoggerFactory
 logger = LoggerFactory().getLogger(__name__)
 
 
-def _hash(obj: ByteString):
+def _hash(obj: ByteString) -> str:
     return hashlib.md5(obj).hexdigest()
 
 
@@ -83,7 +83,7 @@ class Cache:
         return hashlib.md5(str(dependencies).encode()).hexdigest()
 
     @classmethod
-    def _get_hash(cls, obj: Any) -> int:
+    def _get_hash(cls, obj: Any) -> str:
         if isinstance(obj, (str, int, float)):
             return cls._literals(obj)
         elif isinstance(obj, pd.DataFrame):
@@ -95,7 +95,7 @@ class Cache:
         else:
             return _hash(pickle.dumps(obj))
 
-        return -1
+        return '-1'
 
     @staticmethod
     def _data_frame(obj: pd.DataFrame):
